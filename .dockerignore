@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+/vendor
+/storage/*.key
+/node_modules
+/public/storage
+/public/hot
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+docker-compose*.yml
+Dockerfile
+.dockerignore

@@ -1,0 +1,62 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore, with the addition of
+# "#!include" directives (which insert the entries of the given .gitignore-style
+# file at that point).
+#
+# For more information, run:
+#   $ gcloud topic gcloudignore
+#
+.gcloudignore
+.git
+.gitignore
+
+# Node.js dependencies:
+node_modules/
+
+# PHP Composer dependencies:
+/vendor/
+
+# Laravel specific
+/storage/*.key
+/storage/logs
+/storage/framework/cache
+/storage/framework/sessions
+/storage/framework/testing
+/storage/framework/views
+.env
+.env.backup
+.env.production
+.env.staging
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+auth.json
+npm-debug.log
+yarn-error.log
+
+# IDE
+/.idea
+/.vscode
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+/tests/
+/phpunit.xml
+/coverage/
+
+# Docker
+/docker/
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Documentation
+/docs/
+README.md
+/Private & Shared/

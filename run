@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Super simple runner for Docker environments
+# Default environment is staging if not specified
+
+ENV=${1:-staging}
+
+if [ "$ENV" == "staging" ]; then
+    echo "🚀 Starting Staging environment..."
+    export COMPOSE_FILE=docker-compose.staging.yml
+    export ENV_FILE=.env.staging
+elif [ "$ENV" == "prod" ] || [ "$ENV" == "production" ]; then
+    echo "🔥 Starting Production environment..."
+    export COMPOSE_FILE=docker-compose.prod.yml
+    export ENV_FILE=.env.production
+else
+    echo "❌ Error: Use 'staging' or 'production'"
+    echo "Usage: ./run [staging|production]"
+    exit 1
+fi
+
+# Link the environment file to .env so Laravel can read it
+cp $ENV_FILE .env
+
+# Run docker compose
+docker compose up -d --build
+
+echo "✅ Environment $ENV is up and running!"

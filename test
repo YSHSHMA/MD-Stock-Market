@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# Quick test runner with --bail flag
+# Stops at first failure for faster feedback
+
+./sail artisan test --bail "$@"
