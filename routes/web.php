@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\Auth\WebAuthController;
 use App\Http\Controllers\AngelOneConnectionController;
+use App\Http\Controllers\Auth\WebAuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'));
@@ -21,6 +21,9 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/option-chain/angel-one/connect', [AngelOneConnectionController::class, 'connect'])
         ->middleware('throttle:5,1')
         ->name('option-chain.angel-one.connect');
+    Route::get('/option-chain/angel-one/expiries', [AngelOneConnectionController::class, 'expiries'])
+        ->middleware('throttle:30,1')
+        ->name('option-chain.angel-one.expiries');
     Route::post('/option-chain/angel-one/greeks', [AngelOneConnectionController::class, 'greeks'])
         ->middleware('throttle:30,1')
         ->name('option-chain.angel-one.greeks');

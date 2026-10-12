@@ -39,10 +39,10 @@ final class AngelOneOptionGreeksService
         ];
 
         if (
-            !filter_var($identity['client_local_ip'], FILTER_VALIDATE_IP)
-            || !filter_var($identity['client_public_ip'], FILTER_VALIDATE_IP)
-            || !is_string($identity['mac_address'])
-            || !preg_match('/^[0-9a-fA-F]{2}([:-][0-9a-fA-F]{2}){5}$/', $identity['mac_address'])
+            ! filter_var($identity['client_local_ip'], FILTER_VALIDATE_IP)
+            || ! filter_var($identity['client_public_ip'], FILTER_VALIDATE_IP)
+            || ! is_string($identity['mac_address'])
+            || ! preg_match('/^[0-9a-fA-F]{2}([:-][0-9a-fA-F]{2}){5}$/', $identity['mac_address'])
         ) {
             throw new RuntimeException('Angel One network identity is incomplete. Check the server environment configuration.');
         }
@@ -68,10 +68,10 @@ final class AngelOneOptionGreeksService
         $payload = $response->json();
 
         if (
-            !$response->successful()
-            || !is_array($payload)
+            ! $response->successful()
+            || ! is_array($payload)
             || ($payload['status'] ?? false) !== true
-            || !is_array($payload['data'] ?? null)
+            || ! is_array($payload['data'] ?? null)
         ) {
             throw new RuntimeException(
                 is_array($payload) && is_string($payload['message'] ?? null)
@@ -83,17 +83,17 @@ final class AngelOneOptionGreeksService
         $rows = [];
 
         foreach ($payload['data'] as $row) {
-            if (!is_array($row)) {
+            if (! is_array($row)) {
                 throw new RuntimeException('Angel One returned an invalid option Greeks record.');
             }
 
             $optionType = strtoupper((string) ($row['optionType'] ?? ''));
-            if (!in_array($optionType, ['CE', 'PE'], true)) {
+            if (! in_array($optionType, ['CE', 'PE'], true)) {
                 throw new RuntimeException('Angel One returned an unsupported option type.');
             }
 
             $volume = $row['tradeVolume'] ?? null;
-            if (!is_numeric($volume) || (float) $volume < 0) {
+            if (! is_numeric($volume) || (float) $volume < 0) {
                 throw new RuntimeException('Angel One returned an invalid option volume.');
             }
 
@@ -109,19 +109,22 @@ final class AngelOneOptionGreeksService
             ];
         }
 
-        usort($rows, static fn (array $left, array $right): int =>
-            [$left['strike'], $left['option_type']] <=> [$right['strike'], $right['option_type']]
+        usort($rows, static fn (array $left, array $right): int => [$left['strike'], $left['option_type']] <=> [$right['strike'], $right['option_type']]
         );
+
+        if ($rows === []) {
+            throw new RuntimeException('Angel One returned no option Greeks for this underlying and expiry.');
+        }
 
         return $rows;
     }
 
     /**
-     * @param array<string, mixed> $row
+     * @param  array<string, mixed>  $row
      */
     private function numericField(array $row, string $field): float
     {
-        if (!is_numeric($row[$field] ?? null)) {
+        if (! is_numeric($row[$field] ?? null)) {
             throw new RuntimeException("Angel One returned an invalid {$field} value.");
         }
 

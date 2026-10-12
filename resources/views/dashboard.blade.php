@@ -116,7 +116,7 @@
                             </select>
                         </label>
                         <label class="option-select-label">EXPIRY
-                            <input id="option-expiry" type="date" aria-label="Option expiry date" required>
+                            <select id="option-expiry" aria-label="Option expiry date" required></select>
                         </label>
                     </div>
                     <div class="option-summary-grid" id="option-summary-grid" aria-label="Option chain summary">
@@ -176,6 +176,7 @@
                 connected: @json(is_array($angelOneConnection ?? null) && !empty($angelOneConnection['secrets'])),
                 clientCode: @json(is_array($angelOneConnection ?? null) ? ($angelOneConnection['client_code'] ?? null) : null),
                 connectUrl: @json(route('option-chain.angel-one.connect')),
+                expiriesUrl: @json(route('option-chain.angel-one.expiries')),
                 greeksUrl: @json(route('option-chain.angel-one.greeks')),
                 disconnectUrl: @json(route('option-chain.angel-one.disconnect')),
             },

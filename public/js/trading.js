@@ -100,6 +100,10 @@
         optionConnectPrompt.hidden = connected;
     }
 
+    if (angelOneConnected) {
+        setAngelOneConnected(true, config.angelOne.clientCode || '');
+    }
+
     async function postAngelOne(url, body) {
         const response = await fetch(url, {
             method: 'POST',
@@ -122,6 +126,55 @@
         return payload;
     }
 
+    let optionExpiryRequestId = 0;
+
+    async function loadAngelOneExpiries() {
+        const underlying = optionElements.underlying.value;
+        const previousExpiry = optionElements.expiry.value;
+        const requestId = ++optionExpiryRequestId;
+        ++optionChainRequestId;
+        optionElements.expiry.disabled = true;
+        optionElements.expiry.replaceChildren(new Option('Loading expiries…', ''));
+        optionElements.body.innerHTML = '<tr><td colspan="8" class="chain-loading"><span class="spinner"></span> Loading listed expiries…</td></tr>';
+
+        try {
+            const url = new URL(config.angelOne.expiriesUrl, window.location.origin);
+            url.searchParams.set('underlying', underlying);
+            const response = await fetch(url, {
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                const validation = payload.errors && Object.values(payload.errors).flat()[0];
+                throw new Error(validation || payload.message || 'Could not load listed option expiries.');
+            }
+            if (requestId !== optionExpiryRequestId || underlying !== optionElements.underlying.value) return;
+
+            const expiries = payload.expiries || [];
+            if (!expiries.length) {
+                throw new Error(`Angel One currently lists no option expiries for ${underlying}.`);
+            }
+
+            optionElements.expiry.replaceChildren(...expiries.map((expiry) => new Option(expiry.label, expiry.date)));
+            optionElements.expiry.value = expiries.some((expiry) => expiry.date === previousExpiry)
+                ? previousExpiry
+                : expiries[0].date;
+            optionElements.expiry.disabled = false;
+            await refreshOptionChain();
+        } catch (error) {
+            if (requestId !== optionExpiryRequestId || underlying !== optionElements.underlying.value) return;
+            optionElements.expiry.replaceChildren(new Option('Expiries unavailable', ''));
+            optionElements.body.innerHTML = `<tr><td colspan="8" class="chain-error">${escapeHtml(error.message)}</td></tr>`;
+            optionElements.updated.textContent = 'Could not load expiries';
+            showToast(error.message, true);
+        }
+    }
+
     angelOneElements.form.addEventListener('submit', async (event) => {
         event.preventDefault();
         angelOneElements.formError.hidden = true;
@@ -135,11 +188,11 @@
             setAngelOneConnected(true, result.connection.client_code);
             angelOneElements.panel.open = false;
             showToast(result.message);
-            if (optionChainInitialized) {
-                await refreshOptionChain();
-            } else {
-                initializeOptionChain();
+            optionElements.underlying.value = 'NIFTY';
+            if (window.location.hash !== '#option-chain') {
+                window.history.pushState(null, '', '#option-chain');
             }
+            showOptionChain();
         } catch (error) {
             angelOneElements.form.elements.password.value = '';
             angelOneElements.form.elements.totp.value = '';
@@ -346,18 +399,31 @@
         return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
     }
 
-    function prepareAngelOneGreeksView() {
+    function prepareAngelOneGreeksView(source = 'angel_one') {
         optionElements.tableHead.innerHTML = '<tr class="chain-columns-row"><th>TYPE</th><th>STRIKE</th><th>DELTA</th><th>GAMMA</th><th>THETA</th><th>VEGA</th><th>IV</th><th>VOLUME</th></tr>';
         optionElements.summary.hidden = true;
-        optionElements.badge.innerHTML = '<span></span> ANGEL ONE · LIVE GREEKS';
+        const quoteDerived = source === 'calculated_from_live_quotes';
+        optionElements.badge.innerHTML = quoteDerived
+            ? '<span></span> ANGEL ONE · QUOTE-DERIVED GREEKS'
+            : '<span></span> ANGEL ONE · LIVE GREEKS';
         optionElements.badge.classList.add('live-badge');
-        optionElements.description.textContent = 'Live option Greeks by strike for the selected underlying and expiry.';
-        optionElements.footerNote.textContent = 'Angel One Greeks endpoint does not provide LTP, open interest, or underlying spot. Values are market data; verify before trading.';
+        optionElements.description.textContent = quoteDerived
+            ? 'Greeks calculated from Angel One live option quotes for the selected underlying and expiry.'
+            : 'Live option Greeks by strike for the selected underlying and expiry.';
+        optionElements.footerNote.textContent = quoteDerived
+            ? 'These Greeks are calculated locally from live option LTP using Black-Scholes/Black-76 because native Greeks were unavailable. Stale or illiquid quotes can affect the estimates.'
+            : 'Angel One Greeks endpoint does not provide LTP, open interest, or underlying spot. Values are market data; verify before trading.';
     }
 
     function renderAngelOneGreeks(response) {
         const rows = response.data || [];
-        prepareAngelOneGreeksView();
+        if (
+            typeof response.expiry_date === 'string'
+            && Array.from(optionElements.expiry.options).some((option) => option.value === response.expiry_date)
+        ) {
+            optionElements.expiry.value = response.expiry_date;
+        }
+        prepareAngelOneGreeksView(response.greeks_source);
         optionElements.symbol.textContent = `${response.underlying} · ${response.expiry}`;
         optionElements.updated.textContent = `Angel One · ${new Intl.DateTimeFormat(undefined, {
             hour: 'numeric',
@@ -403,7 +469,11 @@
 
         try {
             if (angelOneConnected) {
-                prepareAngelOneGreeksView();
+                prepareAngelOneGreeksView(
+                    ['SENSEX', 'CRUDEOIL'].includes(underlying)
+                        ? 'calculated_from_live_quotes'
+                        : 'angel_one'
+                );
                 if (!expiry) {
                     optionElements.body.innerHTML = '<tr><td colspan="8" class="chain-error">Choose an expiry listed by Angel One for this underlying.</td></tr>';
                     optionElements.updated.textContent = 'Waiting for an expiry';
@@ -465,26 +535,47 @@
 
     function initializeOptionChain() {
         const provider = window.optionChainProvider;
-        if (!provider) {
+        if (!angelOneConnected && !provider) {
             optionElements.body.innerHTML = '<tr><td colspan="11" class="chain-error">Option-chain demo provider is unavailable.</td></tr>';
             return;
         }
 
         if (optionChainInitialized) {
-            refreshOptionChain();
+            if (angelOneConnected) {
+                loadAngelOneExpiries();
+            } else {
+                refreshOptionChain();
+            }
             return;
         }
 
         optionChainInitialized = true;
-        const localDate = new Date();
-        optionElements.expiry.min = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
         optionElements.underlying.value = 'NIFTY';
-        optionElements.expiry.value = provider.getDefaultExpiry();
+        if (!angelOneConnected) {
+            const sampleExpiry = provider.getDefaultExpiry();
+            optionElements.expiry.replaceChildren(new Option(sampleExpiry, sampleExpiry));
+        }
 
-        optionElements.underlying.addEventListener('change', refreshOptionChain);
+        optionElements.underlying.addEventListener('change', () => {
+            if (angelOneConnected) {
+                loadAngelOneExpiries();
+            } else {
+                refreshOptionChain();
+            }
+        });
         optionElements.expiry.addEventListener('change', refreshOptionChain);
-        document.querySelector('#refresh-option-chain').addEventListener('click', refreshOptionChain);
-        if (angelOneConnected) refreshOptionChain();
+        document.querySelector('#refresh-option-chain').addEventListener('click', () => {
+            if (angelOneConnected) {
+                loadAngelOneExpiries();
+            } else {
+                refreshOptionChain();
+            }
+        });
+        if (angelOneConnected) {
+            loadAngelOneExpiries();
+        } else {
+            refreshOptionChain();
+        }
     }
 
     function showOptionChain() {
@@ -646,7 +737,8 @@
     });
 
     refresh();
-    if (window.location.hash === '#option-chain') {
+    if (window.location.hash === '#option-chain' || angelOneConnected) {
+        optionElements.underlying.value = 'NIFTY';
         showOptionChain();
     }
 })();

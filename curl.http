@@ -1,0 +1,18 @@
+curl --url 'http://localhost:8081/option-chain/angel-one/greeks' \
+  -H 'Accept: application/json' \
+  -H 'Accept-Language: en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7,hi;q=0.6' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -b '_ga=GA1.1.2136383056.1791310431; __stripe_mid=4b80ddbf-0777-4aa5-9f92-573d33482582ec4fb0; _ga_ZETVYSGHQD=GS2.1.s1791489294$o4$g1$t1791489359$j60$l0$h0; XSRF-TOKEN=eyJpdiI6Im9OcEFFaGIvWmUzQnhVMXE2L0NWUmc9PSIsInZhbHVlIjoiQTRCUHc0ZThKMS9aV21IL2MyZFROb0RsQ3VxUE5hVUNQR0ZIQVBDdTlVVTB0aHhhbzhaa01GanhFOXJBK3dlc0RPTkYrdy9iYTJyOFVydmpQemV4TW9xT0JvL2gxbDhFOWJaaU1PeEpvWk9abFJJemFNMTljZXVvSmdneEtkRUsiLCJtYWMiOiI2OGMyMTg4ZDUzODY2MjZhYjc1ODY0MDJkNzFlMzBlZWI4YmJkMjI3YTJkNjhmZjgyZjg3MDJiNTRmZjg5MTZhIiwidGFnIjoiIn0%3D; stock-market-app-staging-session=eyJpdiI6ImtUY2ZlMm1aTjJZWFlDLzR5NVFGWUE9PSIsInZhbHVlIjoick9zelJ1NElGVFVpRHIzTkl1aXBKdU9BTy81SmdLdDlnaktHcDNHekRIdVMwejhPTS8xd09JS3pCdExCaUk2M28yMWdkUFVkK0lnejl4UE5PenZKZlNMQXJYNkxYQk1RSjNmV25NVkhIckFSRnUyOXk4NEcvdXFBL3djdG1PQXAiLCJtYWMiOiJjMjBiYTg3NjgxZTc0ZDc1OGE5MzQwZTYzNzMyODYxMDA4ZjIwMjBjNDU1MjczM2YyZjZmN2RiNzc5OWM3NGQwIiwidGFnIjoiIn0%3D' \
+  -H 'Origin: http://localhost:8081' \
+  -H 'Referer: http://localhost:8081/dashboard' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-origin' \
+  -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36' \
+  -H 'X-CSRF-TOKEN: IyytLodHSChFVO1yZy5vP4oBEIiZHNI9iggyXaDa' \
+  -H 'X-Requested-With: XMLHttpRequest' \
+  -H 'sec-ch-ua: "Chromium";v="154", "Google Chrome";v="154", "Not A(Brand";v="99"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Linux"' \
+  --data-raw '{"underlying":"NIFTY","expiry":"2026-10-13"}'

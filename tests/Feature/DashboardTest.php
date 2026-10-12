@@ -3,6 +3,7 @@
 use App\Models\Ticker;
 use App\Models\Transaction;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -33,7 +34,7 @@ test('a visitor can register, reach the dashboard, and use the session-authentic
         ->assertSee('value="NIFTY" selected', false)
         ->assertSee('value="BANKNIFTY"', false)
         ->assertSee('value="CRUDEOIL"', false)
-        ->assertSee('id="option-expiry" type="date"', false)
+        ->assertSee('id="option-expiry" aria-label="Option expiry date"', false)
         ->assertSee('<details class="angel-one-connection" id="angel-one-connection">', false)
         ->assertSee('id="option-live-content" hidden', false)
         ->assertSee('id="option-market-controls" hidden', false)
@@ -251,13 +252,24 @@ test('Angel One login fails explicitly when server network identity is not confi
 });
 
 test('connected Angel One users can fetch live option Greeks for a supported underlying and expiry', function () {
+    Cache::forget('angel_one.option_catalog.v3');
     config([
         'services.angel_one.client_local_ip' => '192.168.1.20',
         'services.angel_one.client_public_ip' => '203.0.113.20',
         'services.angel_one.mac_address' => '00:1A:2B:3C:4D:5E',
     ]);
 
+    $expiry = now()->addDays(7)->format('Y-m-d');
+    $providerExpiry = strtoupper(now()->parse($expiry)->format('dMY'));
     Http::fake([
+        'https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json' => Http::response([
+            [
+                'name' => 'NIFTY',
+                'expiry' => $providerExpiry,
+                'instrumenttype' => 'OPTIDX',
+                'exch_seg' => 'NFO',
+            ],
+        ]),
         'https://apiconnect.angelone.in/rest/secure/angelbroking/marketData/v1/optionGreek' => Http::response([
             'status' => true,
             'data' => [
@@ -285,7 +297,6 @@ test('connected Angel One users can fetch live option Greeks for a supported und
         ]),
     ]);
 
-    $expiry = now()->addDays(7)->format('Y-m-d');
     $this->actingAs(User::factory()->create())
         ->withSession([
             'angel_one.connection' => [
@@ -305,13 +316,15 @@ test('connected Angel One users can fetch live option Greeks for a supported und
         ->assertOk()
         ->assertJsonPath('underlying', 'NIFTY')
         ->assertJsonPath('expiry', strtoupper(now()->parse($expiry)->format('dMY')))
+        ->assertJsonPath('expiry_date', $expiry)
         ->assertJsonPath('data.0.option_type', 'CE')
+        ->assertJsonPath('greeks_source', 'angel_one')
         ->assertJsonPath('data.0.strike', 25000)
         ->assertJsonPath('data.0.implied_volatility', 14.6)
         ->assertJsonPath('data.1.option_type', 'PE')
         ->assertJsonMissing(['jwt_token' => 'test-jwt-token']);
 
-    Http::assertSent(function ($request) use ($expiry): bool {
+    Http::assertSent(function ($request) use ($providerExpiry): bool {
         return $request->url() === 'https://apiconnect.angelone.in/rest/secure/angelbroking/marketData/v1/optionGreek'
             && $request->method() === 'POST'
             && $request->hasHeader('Authorization', 'Bearer test-jwt-token')
@@ -321,9 +334,358 @@ test('connected Angel One users can fetch live option Greeks for a supported und
             && $request->hasHeader('X-MACAddress', '00:1A:2B:3C:4D:5E')
             && $request->data() === [
                 'name' => 'NIFTY',
-                'expirydate' => strtoupper(now()->parse($expiry)->format('dMY')),
+                'expirydate' => $providerExpiry,
             ];
     });
+});
+
+test('Angel One returns nearest expiries separately for supported underlyings', function () {
+    Cache::forget('angel_one.option_catalog.v3');
+    $dates = [
+        'NIFTY' => strtoupper(now()->addDays(7)->format('dMY')),
+        'BANKNIFTY' => strtoupper(now()->addDays(14)->format('dMY')),
+        'SENSEX' => strtoupper(now()->addDays(21)->format('dMY')),
+        'CRUDEOIL' => strtoupper(now()->addDays(28)->format('dMY')),
+    ];
+
+    Http::fake([
+        'https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json' => Http::response([
+            ['name' => 'NIFTY', 'expiry' => $dates['NIFTY'], 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+            ['name' => 'BANKNIFTY', 'expiry' => $dates['BANKNIFTY'], 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+            ['name' => 'SENSEX', 'expiry' => $dates['SENSEX'], 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'BFO'],
+            ['name' => 'CRUDEOIL', 'expiry' => $dates['CRUDEOIL'], 'instrumenttype' => 'OPTFUT', 'exch_seg' => 'MCX'],
+            ['name' => 'SENSEX', 'expiry' => $dates['SENSEX'], 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+            ['name' => 'BANKNIFTY', 'expiry' => $dates['BANKNIFTY'], 'instrumenttype' => 'FUTIDX', 'exch_seg' => 'NFO'],
+        ]),
+    ]);
+
+    $user = User::factory()->create();
+    foreach ($dates as $underlying => $date) {
+        $this->actingAs($user)
+            ->getJson(route('option-chain.angel-one.expiries', ['underlying' => $underlying]))
+            ->assertOk()
+            ->assertJsonPath('underlying', $underlying)
+            ->assertJsonPath('expiries.0.date', now()->parse($date)->format('Y-m-d'));
+    }
+
+    Http::assertSentCount(1);
+});
+
+test('Angel One requests Greeks for the selected underlying and exact upcoming expiry', function () {
+    Cache::forget('angel_one.option_catalog.v3');
+    $expiry = now()->addDays(14)->format('Y-m-d');
+    $providerExpiry = strtoupper(now()->parse($expiry)->format('dMY'));
+
+    Http::fake([
+        'https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json' => Http::response([
+            ['name' => 'BANKNIFTY', 'expiry' => $providerExpiry, 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ]),
+        'https://apiconnect.angelone.in/rest/secure/angelbroking/marketData/v1/optionGreek' => Http::response([
+            'status' => true,
+            'data' => [
+                [
+                    'strikePrice' => '50000.000000',
+                    'optionType' => 'CE',
+                    'delta' => '0.62',
+                    'gamma' => '0.0004',
+                    'theta' => '-14.1',
+                    'vega' => '20.5',
+                    'impliedVolatility' => '15.3',
+                    'tradeVolume' => '3200',
+                ],
+            ],
+        ]),
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->withSession([
+            'angel_one.connection' => [
+                'client_code' => 'TESTCLIENT',
+                'secrets' => Crypt::encryptString(json_encode([
+                    'api_key' => 'test-private-api-key',
+                    'jwt_token' => 'test-jwt-token',
+                ], JSON_THROW_ON_ERROR)),
+            ],
+        ])
+        ->postJson(route('option-chain.angel-one.greeks'), [
+            'underlying' => 'BANKNIFTY',
+            'expiry' => $expiry,
+        ])
+        ->assertOk()
+        ->assertJsonPath('underlying', 'BANKNIFTY')
+        ->assertJsonPath('expiry_date', $expiry)
+        ->assertJsonPath('greeks_source', 'angel_one')
+        ->assertJsonPath('data.0.option_type', 'CE');
+
+    Http::assertSent(function ($request) use ($providerExpiry): bool {
+        return $request->url() === 'https://apiconnect.angelone.in/rest/secure/angelbroking/marketData/v1/optionGreek'
+            && $request->data() === [
+                'name' => 'BANKNIFTY',
+                'expirydate' => $providerExpiry,
+            ];
+    });
+});
+
+test('NIFTY and BANKNIFTY native Greeks do not depend on contract-master expiry discovery', function () {
+    config([
+        'services.angel_one.client_local_ip' => '192.168.1.20',
+        'services.angel_one.client_public_ip' => '203.0.113.20',
+        'services.angel_one.mac_address' => '00:1A:2B:3C:4D:5E',
+    ]);
+
+    $expiry = now()->addDays(14)->format('Y-m-d');
+    Http::fake([
+        'https://apiconnect.angelone.in/rest/secure/angelbroking/marketData/v1/optionGreek' => Http::response([
+            'status' => true,
+            'data' => [[
+                'strikePrice' => '50000.000000',
+                'optionType' => 'CE',
+                'delta' => '0.62',
+                'gamma' => '0.0004',
+                'theta' => '-14.1',
+                'vega' => '20.5',
+                'impliedVolatility' => '15.3',
+                'tradeVolume' => '3200',
+            ]],
+        ]),
+    ]);
+
+    $user = User::factory()->create();
+    foreach (['NIFTY', 'BANKNIFTY'] as $underlying) {
+        $this->actingAs($user)
+            ->withSession([
+                'angel_one.connection' => [
+                    'client_code' => 'TESTCLIENT',
+                    'secrets' => Crypt::encryptString(json_encode([
+                        'api_key' => 'test-private-api-key',
+                        'jwt_token' => 'test-jwt-token',
+                    ], JSON_THROW_ON_ERROR)),
+                ],
+            ])
+            ->postJson(route('option-chain.angel-one.greeks'), [
+                'underlying' => $underlying,
+                'expiry' => $expiry,
+            ])
+            ->assertOk()
+            ->assertJsonPath('underlying', $underlying)
+            ->assertJsonPath('greeks_source', 'angel_one')
+            ->assertJsonPath('data.0.strike', 50000);
+    }
+
+    Http::assertSentCount(2);
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'OpenAPIScripMaster.json')
+    );
+});
+
+test('NIFTY and BANKNIFTY fall back to live quotes when native Greeks are unavailable', function () {
+    Cache::forget('angel_one.option_catalog.v3');
+    config([
+        'services.angel_one.client_local_ip' => '192.168.1.20',
+        'services.angel_one.client_public_ip' => '203.0.113.20',
+        'services.angel_one.mac_address' => '00:1A:2B:3C:4D:5E',
+    ]);
+
+    $expiry = now()->addDays(30)->format('Y-m-d');
+    $providerExpiry = strtoupper(now()->parse($expiry)->format('dMY'));
+    $master = [
+        ['name' => 'NIFTY', 'token' => '99926000', 'instrumenttype' => 'AMXIDX', 'exch_seg' => 'NSE'],
+        ['name' => 'BANKNIFTY', 'token' => '99926009', 'instrumenttype' => 'AMXIDX', 'exch_seg' => 'NSE'],
+        ['name' => 'NIFTY', 'symbol' => "NIFTY{$providerExpiry}25000CE", 'token' => '101', 'expiry' => $providerExpiry, 'strike' => '2500000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ['name' => 'NIFTY', 'symbol' => "NIFTY{$providerExpiry}25000PE", 'token' => '102', 'expiry' => $providerExpiry, 'strike' => '2500000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ['name' => 'BANKNIFTY', 'symbol' => "BANKNIFTY{$providerExpiry}50000CE", 'token' => '201', 'expiry' => $providerExpiry, 'strike' => '5000000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ['name' => 'BANKNIFTY', 'symbol' => "BANKNIFTY{$providerExpiry}50000PE", 'token' => '202', 'expiry' => $providerExpiry, 'strike' => '5000000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+    ];
+
+    Http::fake(function ($request) use ($master) {
+        if (str_contains($request->url(), 'optionGreek')) {
+            return Http::response(['status' => false, 'message' => 'Native Greeks unavailable.'], 422);
+        }
+
+        if (str_contains($request->url(), 'OpenAPIScripMaster.json')) {
+            return Http::response($master);
+        }
+
+        $exchangeTokens = $request->data()['exchangeTokens'] ?? [];
+        $exchange = array_key_first($exchangeTokens);
+        $tokens = $exchangeTokens[$exchange] ?? [];
+        $underlyingPrices = ['99926000' => 25000, '99926009' => 50000];
+        if ($exchange === 'NSE') {
+            return Http::response([
+                'status' => true,
+                'data' => ['fetched' => array_map(
+                    static fn (string $token): array => [
+                        'symbolToken' => $token,
+                        'ltp' => $underlyingPrices[$token],
+                    ],
+                    $tokens
+                )],
+            ]);
+        }
+
+        return Http::response([
+            'status' => true,
+            'data' => ['fetched' => array_map(
+                static fn (string $token): array => [
+                    'symbolToken' => $token,
+                    'ltp' => in_array($token, ['101', '201'], true) ? 400 : 350,
+                    'tradeVolume' => 125,
+                ],
+                $tokens
+            )],
+        ]);
+    });
+
+    $user = User::factory()->create();
+    foreach (['NIFTY', 'BANKNIFTY'] as $underlying) {
+        $this->actingAs($user)
+            ->withSession([
+                'angel_one.connection' => [
+                    'client_code' => 'TESTCLIENT',
+                    'secrets' => Crypt::encryptString(json_encode([
+                        'api_key' => 'test-private-api-key',
+                        'jwt_token' => 'test-jwt-token',
+                    ], JSON_THROW_ON_ERROR)),
+                ],
+            ])
+            ->postJson(route('option-chain.angel-one.greeks'), [
+                'underlying' => $underlying,
+                'expiry' => $expiry,
+            ])
+            ->assertOk()
+            ->assertJsonPath('greeks_source', 'calculated_from_live_quotes')
+            ->assertJsonPath('data.0.trade_volume', 125);
+    }
+
+    Http::assertSentCount(7);
+    Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/quote/')
+        && (
+            ($request['exchangeTokens'] ?? []) === ['NSE' => ['99926000']]
+            || ($request['exchangeTokens'] ?? []) === ['NSE' => ['99926009']]
+            || ($request['exchangeTokens'] ?? []) === ['NFO' => ['101', '102']]
+            || ($request['exchangeTokens'] ?? []) === ['NFO' => ['201', '202']]
+        )
+    );
+});
+
+test('SENSEX and CRUDEOIL use quotes to calculate Greeks from their correct market segments', function () {
+    Cache::forget('angel_one.option_catalog.v3');
+    config([
+        'services.angel_one.client_local_ip' => '192.168.1.20',
+        'services.angel_one.client_public_ip' => '203.0.113.20',
+        'services.angel_one.mac_address' => '00:1A:2B:3C:4D:5E',
+    ]);
+
+    $expiry = now()->addDays(30)->format('Y-m-d');
+    $providerExpiry = strtoupper(now()->parse($expiry)->format('dMY'));
+    $futureExpiry = strtoupper(now()->addDays(35)->format('dMY'));
+    $master = [
+        ['name' => 'SENSEX', 'token' => '99919000', 'instrumenttype' => 'AMXIDX', 'exch_seg' => 'BSE'],
+        ['name' => 'SENSEX', 'symbol' => "SENSEX{$providerExpiry}72000CE", 'token' => '301', 'expiry' => $providerExpiry, 'strike' => '7200000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'BFO'],
+        ['name' => 'SENSEX', 'symbol' => "SENSEX{$providerExpiry}72000PE", 'token' => '302', 'expiry' => $providerExpiry, 'strike' => '7200000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'BFO'],
+        ['name' => 'CRUDEOIL', 'symbol' => "CRUDEOIL{$providerExpiry}7000CE", 'token' => '401', 'expiry' => $providerExpiry, 'strike' => '700000', 'instrumenttype' => 'OPTFUT', 'exch_seg' => 'MCX'],
+        ['name' => 'CRUDEOIL', 'symbol' => "CRUDEOIL{$providerExpiry}7000PE", 'token' => '402', 'expiry' => $providerExpiry, 'strike' => '700000', 'instrumenttype' => 'OPTFUT', 'exch_seg' => 'MCX'],
+        ['name' => 'CRUDEOIL', 'symbol' => "CRUDEOIL{$futureExpiry}FUT", 'token' => '501', 'expiry' => $futureExpiry, 'instrumenttype' => 'FUTCOM', 'exch_seg' => 'MCX'],
+    ];
+
+    Http::fake(function ($request) use ($master) {
+        if (str_contains($request->url(), 'OpenAPIScripMaster.json')) {
+            return Http::response($master);
+        }
+
+        $tokensByExchange = $request->data()['exchangeTokens'] ?? [];
+        $exchange = array_key_first($tokensByExchange);
+        $tokens = $tokensByExchange[$exchange] ?? [];
+        $quotes = match ([$exchange, $tokens]) {
+            ['BSE', ['99919000']] => [['symbolToken' => '99919000', 'ltp' => 72000]],
+            ['BFO', ['301', '302']] => [
+                ['symbolToken' => '301', 'ltp' => 1200, 'tradeVolume' => 800],
+                ['symbolToken' => '302', 'ltp' => 1100, 'tradeVolume' => 700],
+            ],
+            ['MCX', ['501']] => [['symbolToken' => '501', 'ltp' => 7000]],
+            ['MCX', ['401', '402']] => [
+                ['symbolToken' => '401', 'ltp' => 180, 'tradeVolume' => 500],
+                ['symbolToken' => '402', 'ltp' => 170, 'tradeVolume' => 450],
+            ],
+            default => [],
+        };
+
+        return Http::response(['status' => true, 'data' => ['fetched' => $quotes]]);
+    });
+
+    $user = User::factory()->create();
+    foreach (['SENSEX', 'CRUDEOIL'] as $underlying) {
+        $this->actingAs($user)
+            ->withSession([
+                'angel_one.connection' => [
+                    'client_code' => 'TESTCLIENT',
+                    'secrets' => Crypt::encryptString(json_encode([
+                        'api_key' => 'test-private-api-key',
+                        'jwt_token' => 'test-jwt-token',
+                    ], JSON_THROW_ON_ERROR)),
+                ],
+            ])
+            ->postJson(route('option-chain.angel-one.greeks'), [
+                'underlying' => $underlying,
+                'expiry' => $expiry,
+            ])
+            ->assertOk()
+            ->assertJsonPath('greeks_source', 'calculated_from_live_quotes')
+            ->assertJsonPath('data.0.option_type', 'CE')
+            ->assertJsonPath('data.0.trade_volume', $underlying === 'SENSEX' ? 800 : 500)
+            ->assertJsonStructure([
+                'data' => [['strike', 'option_type', 'delta', 'gamma', 'theta', 'vega', 'implied_volatility']],
+            ]);
+    }
+
+    Http::assertSent(function ($request): bool {
+        if (! str_ends_with($request->url(), '/quote/')) {
+            return false;
+        }
+
+        $exchangeTokens = $request->data()['exchangeTokens'] ?? [];
+
+        return $request['mode'] === 'FULL'
+            && (
+                $exchangeTokens === ['BSE' => ['99919000']]
+                || $exchangeTokens === ['BFO' => ['301', '302']]
+                || $exchangeTokens === ['MCX' => ['501']]
+                || $exchangeTokens === ['MCX' => ['401', '402']]
+            );
+    });
+    Http::assertSentCount(5);
+});
+
+test('Angel One rejects a date not listed for the selected underlying', function () {
+    Cache::forget('angel_one.option_catalog.v3');
+    $listedExpiry = now()->addDays(14)->format('Y-m-d');
+    Http::fake([
+        'https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json' => Http::response([
+            [
+                'name' => 'SENSEX',
+                'expiry' => strtoupper(now()->parse($listedExpiry)->format('dMY')),
+                'instrumenttype' => 'OPTIDX',
+                'exch_seg' => 'BFO',
+            ],
+        ]),
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->withSession([
+            'angel_one.connection' => [
+                'secrets' => Crypt::encryptString(json_encode([
+                    'api_key' => 'test-private-api-key',
+                    'jwt_token' => 'test-jwt-token',
+                ], JSON_THROW_ON_ERROR)),
+            ],
+        ])
+        ->postJson(route('option-chain.angel-one.greeks'), [
+            'underlying' => 'SENSEX',
+            'expiry' => now()->addDays(7)->format('Y-m-d'),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonPath('message', 'That expiry is not listed for this underlying. Choose one of the available expiries.');
+
+    Http::assertSentCount(1);
 });
 
 test('option Greeks endpoint requires an Angel One connection and a valid market selection', function () {
