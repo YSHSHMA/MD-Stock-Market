@@ -11,7 +11,7 @@ A Laravel-based stock portfolio tracking application with Telegram bot integrati
 - **RESTful API**: Full CRUD operations for portfolio management
 - **Portfolio dashboard**: Sign in or create an account to review holdings, returns, and recent transactions, and record buys or sells.
 - **Option chain preview**: Browse a clearly labeled simulated index option chain by underlying and expiry; connect a live options provider before relying on market values.
-- **Angel One SmartAPI connection**: Authenticate from the option-chain panel; the PIN and TOTP are used only for login, while API credentials and returned tokens are encrypted in the signed-in session. After connecting, the option panel loads the nearest listed expiry for NIFTY by default and lists upcoming expiries for BANKNIFTY, SENSEX, and CRUDEOIL from Angel One's instrument master. The app uses Angel One's native Greeks endpoint where it works and falls back to live FULL quotes to calculate Black-Scholes/Black-76 Greeks for any supported underlying when native Greeks are unavailable. These locally calculated values are estimates from last-traded prices, not provider-published Greeks. The market quote endpoint requires exchange/token IDs and does not enumerate expiries.
+- **Angel One SmartAPI connection**: Authenticate from the option-chain panel; the PIN and TOTP are used only for login, while API credentials and returned tokens are encrypted before persistent storage. After connecting, the option panel loads the nearest listed expiry for NIFTY by default and lists upcoming expiries for BANKNIFTY, SENSEX, and CRUDEOIL from Angel One's instrument master. The app uses native Greeks where available and falls back to live FULL quotes to calculate Black-Scholes/Black-76 Greeks. An active dashboard subscription refreshes the selected underlying/expiry every 10 seconds on the server and pushes changed data through a private Laravel Reverb WebSocket channel; the browser updates without a page reload. Calculated Greeks are estimates from last-traded prices, not provider-published Greeks.
 - **Cloud-Ready**: Optimized for Google Cloud Run deployment
 - **Type-Safe**: Strict PHP 8.4 typing with `declare(strict_types=1)`
 - **Tested**: Comprehensive Pest test suite
@@ -61,6 +61,10 @@ For detailed information on configuration and deployment, please refer to the fo
    ```bash
    docker compose -f docker-compose.yml exec app php artisan migrate --force
    ```
+
+   The Compose stack includes a dedicated Reverb WebSocket container. Local HTTP traffic upgrades at `/app/` through the Nginx container; only the selected market is refreshed, and only changed payloads are broadcast.
+
+   The single-container Cloud Run deployment described below does not run the Reverb server or 10-second market scheduler; use Docker Compose for the live WebSocket option updates unless you separately deploy those always-on services.
 
 5. **Access the app**:
    - Web: http://localhost:8081
@@ -146,6 +150,7 @@ GET /api/cron/daily-report     # Trigger daily report generation
 
 2. **Configure production environment**:
    The `.env.production` file contains dummy values. Edit it with your **real** production credentials.
+   Set `REVERB_APP_KEY` and `REVERB_APP_SECRET` to independent random values (for example, generate each with `openssl rand -hex 32`) and set `REVERB_ALLOWED_ORIGINS` to the website hostname without a scheme. The production Compose setup proxies secure WebSocket upgrades through Nginx on the same host.
 
 3. **Deploy to Cloud Run**:
    ```bash

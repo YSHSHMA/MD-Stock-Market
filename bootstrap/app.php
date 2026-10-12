@@ -7,9 +7,10 @@ use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__ . '/../routes/web.php',
-        api: __DIR__ . '/../routes/api.php',
-        commands: __DIR__ . '/../routes/console.php',
+        channels: __DIR__.'/../routes/channels.php',
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -24,6 +25,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withSchedule(function ($schedule): void {
+        $schedule->command('option-chain:broadcast-live')
+            ->everyTenSeconds()
+            ->withoutOverlapping(1);
+
         $schedule->command('stocks:fetch')
             ->everyThirtyMinutes()
             ->between('09:00', '18:00')
@@ -38,7 +43,7 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->is('api/*')) {
                 return response()->json([
                     'message' => $e->getMessage(),
-                    'error' => 'CURRENCY_NOT_SET'
+                    'error' => 'CURRENCY_NOT_SET',
                 ], 400);
             }
         });

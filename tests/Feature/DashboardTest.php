@@ -5,6 +5,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -165,6 +166,14 @@ test('Angel One login stores encrypted tokens in the signed-in session without r
         'refresh_token' => 'test-refresh-token',
         'feed_token' => 'test-feed-token',
     ])->not->toHaveKey('password')->not->toHaveKey('totp');
+    $storedConnection = DB::table('angel_one_connections')->where('user_id', auth()->id())->first();
+    expect($storedConnection->client_code)->toBe('TESTCLIENT')
+        ->and($storedConnection->encrypted_secrets)->not->toContain('test-jwt-token')
+        ->and(json_decode(Crypt::decryptString($storedConnection->encrypted_secrets), true, flags: JSON_THROW_ON_ERROR))
+        ->toMatchArray([
+            'api_key' => 'test-private-api-key',
+            'jwt_token' => 'test-jwt-token',
+        ]);
 
     $this->get('/dashboard')
         ->assertOk()
@@ -683,7 +692,7 @@ test('Angel One rejects a date not listed for the selected underlying', function
             'expiry' => now()->addDays(7)->format('Y-m-d'),
         ])
         ->assertUnprocessable()
-        ->assertJsonPath('message', 'That expiry is not listed for this underlying. Choose one of the available expiries.');
+        ->assertJsonPath('message', 'Angel One has no option contracts for SENSEX on '.now()->addDays(7)->format('Y-m-d').'.');
 
     Http::assertSentCount(1);
 });

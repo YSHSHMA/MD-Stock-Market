@@ -172,16 +172,23 @@
             userName: @json(auth()->user()->name),
             apiBase: @json(url('/api')),
             loginUrl: @json(route('login')),
+            userId: @json((string) auth()->id()),
             angelOne: {
-                connected: @json(is_array($angelOneConnection ?? null) && !empty($angelOneConnection['secrets'])),
-                clientCode: @json(is_array($angelOneConnection ?? null) ? ($angelOneConnection['client_code'] ?? null) : null),
+                connected: @json($angelOneConnection !== null),
+                clientCode: @json($angelOneConnection->client_code ?? null),
                 connectUrl: @json(route('option-chain.angel-one.connect')),
                 expiriesUrl: @json(route('option-chain.angel-one.expiries')),
                 greeksUrl: @json(route('option-chain.angel-one.greeks')),
+                subscribeUrl: @json(route('option-chain.angel-one.subscribe')),
                 disconnectUrl: @json(route('option-chain.angel-one.disconnect')),
+            },
+            realtime: {
+                key: @json(config('broadcasting.connections.reverb.key')),
+                authUrl: @json(url('/broadcasting/auth')),
             },
         };
     </script>
+    @vite('resources/js/market-stream.js')
     <script src="{{ asset('js/option-chain-demo.js') }}" defer></script>
     <script src="{{ asset('js/trading.js') }}" defer></script>
 </body>

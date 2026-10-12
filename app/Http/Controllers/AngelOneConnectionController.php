@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Services\AngelOneAuthService;
+use App\Services\AngelOneLiveOptionGreeksService;
 use App\Services\AngelOneOptionExpiryService;
-use App\Services\AngelOneOptionGreeksService;
-use App\Services\AngelOneQuotedOptionGreeksService;
 use DateTimeImmutable;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use JsonException;
@@ -90,12 +90,94 @@ final class AngelOneConnectionController extends Controller
             'connected_at' => now()->toIso8601String(),
         ]);
 
+        DB::table('angel_one_connections')->upsert(
+            [[
+                'user_id' => $request->user()->id,
+                'client_code' => $credentials['clientcode'],
+                'encrypted_secrets' => Crypt::encryptString(json_encode([
+                    'api_key' => $credentials['api_key'],
+                    ...$tokens,
+                ], JSON_THROW_ON_ERROR)),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]],
+            ['user_id'],
+            ['client_code', 'encrypted_secrets', 'updated_at']
+        );
+
         return response()->json([
-            'message' => 'Angel One login succeeded. The access token was stored securely for this session.',
+            'message' => 'Angel One login succeeded. Credentials are encrypted for your account and live subscriptions.',
             'connection' => [
                 'client_code' => $credentials['clientcode'],
                 'connected_at' => now()->toIso8601String(),
             ],
+        ]);
+    }
+
+    public function subscribe(Request $request, AngelOneOptionExpiryService $expiryService): JsonResponse
+    {
+        $input = $request->validate([
+            'underlying' => ['required', 'string', 'in:NIFTY,BANKNIFTY,SENSEX,CRUDEOIL'],
+            'expiry' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+        ]);
+
+        $connection = DB::table('angel_one_connections')
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if ($connection === null) {
+            return response()->json([
+                'message' => 'Connect your Angel One account before starting live updates.',
+            ], 409);
+        }
+
+        try {
+            $expiries = $expiryService->getExpiries($input['underlying']);
+            if (! in_array($input['expiry'], array_column($expiries, 'date'), true)) {
+                return response()->json([
+                    'message' => 'That expiry is not listed for this underlying.',
+                ], 422);
+            }
+        } catch (ConnectionException $exception) {
+            Log::warning('Could not validate live market subscription expiry.', [
+                'user_id' => $request->user()->id,
+                'underlying' => $input['underlying'],
+            ]);
+
+            return response()->json([
+                'message' => 'Could not validate this expiry with Angel One. Try again shortly.',
+            ], 502);
+        } catch (RuntimeException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 503);
+        }
+
+        $existingSubscription = DB::table('angel_one_market_subscriptions')
+            ->where('user_id', $request->user()->id)
+            ->first();
+        $sameSelection = $existingSubscription !== null
+            && $existingSubscription->underlying === $input['underlying']
+            && $existingSubscription->expiry === $input['expiry'];
+
+        DB::table('angel_one_market_subscriptions')->upsert(
+            [[
+                'user_id' => $request->user()->id,
+                'underlying' => $input['underlying'],
+                'expiry' => $input['expiry'],
+                'last_seen_at' => now(),
+                'payload_hash' => $sameSelection ? $existingSubscription->payload_hash : null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]],
+            ['user_id'],
+            ['underlying', 'expiry', 'last_seen_at', 'payload_hash', 'updated_at']
+        );
+
+        return response()->json([
+            'message' => 'Live option updates enabled.',
+            'underlying' => $input['underlying'],
+            'expiry' => $input['expiry'],
         ]);
     }
 
@@ -130,9 +212,7 @@ final class AngelOneConnectionController extends Controller
 
     public function greeks(
         Request $request,
-        AngelOneOptionGreeksService $greeksService,
-        AngelOneQuotedOptionGreeksService $quotedGreeksService,
-        AngelOneOptionExpiryService $expiryService
+        AngelOneLiveOptionGreeksService $greeksService
     ): JsonResponse {
         $input = $request->validate([
             'underlying' => ['required', 'string', 'in:NIFTY,BANKNIFTY,SENSEX,CRUDEOIL'],
@@ -175,68 +255,12 @@ final class AngelOneConnectionController extends Controller
         }
 
         try {
-            if (in_array($input['underlying'], ['SENSEX', 'CRUDEOIL'], true)) {
-                $expiries = $expiryService->getExpiries($input['underlying']);
-                $selectedExpiry = (new DateTimeImmutable($input['expiry']))->format('Y-m-d');
-
-                if (! in_array($selectedExpiry, array_column($expiries, 'date'), true)) {
-                    return response()->json([
-                        'message' => 'That expiry is not listed for this underlying. Choose one of the available expiries.',
-                    ], 422);
-                }
-
-                $contracts = $expiryService->getQuotedOptionContracts(
-                    $input['underlying'],
-                    $input['expiry']
-                );
-                $rows = $quotedGreeksService->getOptionGreeks(
-                    $input['underlying'],
-                    $input['expiry'],
-                    $contracts,
-                    $secrets['jwt_token'],
-                    $secrets['api_key']
-                );
-                $greeksSource = 'calculated_from_live_quotes';
-            } else {
-                try {
-                    $rows = $greeksService->getOptionGreeks(
-                        $input['underlying'],
-                        strtoupper((new DateTimeImmutable($input['expiry']))->format('dMY')),
-                        $secrets['jwt_token'],
-                        $secrets['api_key']
-                    );
-                    $greeksSource = 'angel_one';
-                } catch (ConnectionException|RuntimeException $nativeGreeksException) {
-                    Log::warning('Angel One native Greeks failed; trying quote-based Greeks.', [
-                        'user_id' => $request->user()->id,
-                        'underlying' => $input['underlying'],
-                        'expiry' => $input['expiry'],
-                    ]);
-
-                    try {
-                        $contracts = $expiryService->getQuotedOptionContracts(
-                            $input['underlying'],
-                            $input['expiry']
-                        );
-                        $rows = $quotedGreeksService->getOptionGreeks(
-                            $input['underlying'],
-                            $input['expiry'],
-                            $contracts,
-                            $secrets['jwt_token'],
-                            $secrets['api_key']
-                        );
-                        $greeksSource = 'calculated_from_live_quotes';
-                    } catch (ConnectionException $fallbackConnectionException) {
-                        throw $fallbackConnectionException;
-                    } catch (RuntimeException $fallbackException) {
-                        throw new RuntimeException(
-                            'Angel One native Greeks failed: '.$nativeGreeksException->getMessage()
-                            .' Quote-based fallback failed: '.$fallbackException->getMessage(),
-                            previous: $nativeGreeksException
-                        );
-                    }
-                }
-            }
+            $result = $greeksService->get(
+                $input['underlying'],
+                $input['expiry'],
+                $secrets,
+                (string) $request->user()->id
+            );
         } catch (ConnectionException $exception) {
             Log::warning('Angel One option Greeks request could not reach the provider.', [
                 'user_id' => $request->user()->id,
@@ -256,14 +280,16 @@ final class AngelOneConnectionController extends Controller
             'underlying' => $input['underlying'],
             'expiry' => strtoupper((new DateTimeImmutable($input['expiry']))->format('dMY')),
             'expiry_date' => (new DateTimeImmutable($input['expiry']))->format('Y-m-d'),
-            'greeks_source' => $greeksSource,
-            'data' => $rows,
+            'greeks_source' => $result['source'],
+            'data' => $result['data'],
         ]);
     }
 
     public function disconnect(Request $request): JsonResponse
     {
         $request->session()->forget('angel_one.connection');
+        DB::table('angel_one_market_subscriptions')->where('user_id', $request->user()->id)->delete();
+        DB::table('angel_one_connections')->where('user_id', $request->user()->id)->delete();
 
         return response()->json([
             'message' => 'Angel One session disconnected.',

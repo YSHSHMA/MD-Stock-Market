@@ -35,11 +35,12 @@ The app is configured to run optimally with **Docker Compose**. This is the simp
    ```bash
    ./run production
    ```
-   *This command will start 4 containers:*
+   *This command will start the application, web proxy, WebSocket server, background worker, and scheduler (plus the local database when using the local Compose file):*
    - `app`: The Laravel core.
    - `web`: Nginx to handle requests.
+   - `websocket`: Laravel Reverb; Nginx proxies same-origin WebSocket upgrades.
    - `worker`: To process prices and reports in the background.
-   - `scheduler`: To handle cron heartbeats (automatic fetches).
+   - `scheduler`: To refresh active option subscriptions every 10 seconds and handle scheduled jobs.
 
 4. **Initialize the DB**:
    ```bash
@@ -49,6 +50,8 @@ The app is configured to run optimally with **Docker Compose**. This is the simp
 ---
 
 ## ☁️ Special: Google Cloud Platform (GCP) Deployment
+
+The single-container `deploy.sh` Cloud Run deployment does not start the Reverb server or the continuously running Laravel scheduler. Use the Docker Compose VPS deployment above for live option updates, or deploy Reverb and the market-refresh scheduler as separate always-on services and configure the WebSocket proxy accordingly.
 
 If you prefer using **Google Cloud Run** instead of a VPS, you need to handle Crons and Queues differently:
 

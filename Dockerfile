@@ -1,3 +1,12 @@
+FROM node:22-alpine AS frontend
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY resources ./resources
+COPY vite.config.js ./
+RUN npm run build
+
 FROM php:8.4-fpm-alpine
 
 # Set working directory
@@ -34,6 +43,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Copy the application and install its production dependencies
 COPY --chown=www-data:www-data . /var/www
+COPY --from=frontend --chown=www-data:www-data /app/public/build /var/www/public/build
 RUN mkdir -p /var/www/vendor \
     && chown www-data:www-data /var/www/vendor
 USER www-data

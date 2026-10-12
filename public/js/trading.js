@@ -127,6 +127,71 @@
     }
 
     let optionExpiryRequestId = 0;
+    let liveSubscriptionTimer;
+    let liveSubscriptionSelection = '';
+    let liveSubscriptionErrorShown = false;
+
+    async function renewLiveSubscription() {
+        if (!angelOneConnected || document.hidden) return;
+
+        const underlying = optionElements.underlying.value;
+        const expiry = optionElements.expiry.value;
+        if (!expiry) return;
+
+        try {
+            await postAngelOne(config.angelOne.subscribeUrl, { underlying, expiry });
+            liveSubscriptionSelection = `${underlying}:${expiry}`;
+            liveSubscriptionErrorShown = false;
+        } catch (error) {
+            optionElements.updated.textContent = 'Live updates unavailable';
+            if (!liveSubscriptionErrorShown) {
+                showToast(error.message, true);
+                liveSubscriptionErrorShown = true;
+            }
+        }
+    }
+
+    function startLiveSubscription() {
+        const selection = `${optionElements.underlying.value}:${optionElements.expiry.value}`;
+        if (!optionElements.expiry.value || selection === liveSubscriptionSelection) return;
+
+        liveSubscriptionSelection = '';
+        renewLiveSubscription();
+        if (!liveSubscriptionTimer) {
+            liveSubscriptionTimer = window.setInterval(renewLiveSubscription, 20000);
+        }
+    }
+
+    window.addEventListener('marketboard:live-greeks', (event) => {
+        const update = event.detail;
+        if (
+            !angelOneConnected
+            || update.underlying !== optionElements.underlying.value
+            || update.expiry_date !== optionElements.expiry.value
+        ) return;
+
+        ++optionChainRequestId;
+        renderAngelOneGreeks(update);
+        if (update.updated_at) {
+            optionElements.updated.textContent = `Live WebSocket · ${new Intl.DateTimeFormat(undefined, {
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+            }).format(new Date(update.updated_at))}`;
+        }
+    });
+
+    window.addEventListener('marketboard:realtime-state', (event) => {
+        if (event.detail.current === 'connected') {
+            startLiveSubscription();
+        }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            startLiveSubscription();
+        }
+    });
 
     async function loadAngelOneExpiries() {
         const underlying = optionElements.underlying.value;
@@ -165,6 +230,7 @@
                 ? previousExpiry
                 : expiries[0].date;
             optionElements.expiry.disabled = false;
+            startLiveSubscription();
             await refreshOptionChain();
         } catch (error) {
             if (requestId !== optionExpiryRequestId || underlying !== optionElements.underlying.value) return;
@@ -210,6 +276,9 @@
         try {
             const result = await postAngelOne(config.angelOne.disconnectUrl, {});
             setAngelOneConnected(false);
+            liveSubscriptionSelection = '';
+            window.clearInterval(liveSubscriptionTimer);
+            liveSubscriptionTimer = undefined;
             angelOneElements.panel.open = false;
             showToast(result.message);
         } catch (error) {
@@ -563,7 +632,10 @@
                 refreshOptionChain();
             }
         });
-        optionElements.expiry.addEventListener('change', refreshOptionChain);
+        optionElements.expiry.addEventListener('change', () => {
+            startLiveSubscription();
+            refreshOptionChain();
+        });
         document.querySelector('#refresh-option-chain').addEventListener('click', () => {
             if (angelOneConnected) {
                 loadAngelOneExpiries();
