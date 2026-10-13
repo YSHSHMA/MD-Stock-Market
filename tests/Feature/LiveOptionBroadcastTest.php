@@ -51,8 +51,8 @@ test('active subscriptions broadcast only changed option data to the owning priv
         $quotes = $exchange === 'BSE'
             ? [['symbolToken' => '99919000', 'ltp' => 72000]]
             : [
-                ['symbolToken' => '301', 'ltp' => 1200, 'tradeVolume' => 800],
-                ['symbolToken' => '302', 'ltp' => 1100, 'tradeVolume' => 700],
+                ['symbolToken' => '301', 'ltp' => 1200, 'opnInterest' => 14000, 'tradeVolume' => 800],
+                ['symbolToken' => '302', 'ltp' => 1100, 'opnInterest' => 16000, 'tradeVolume' => 700],
             ];
 
         return Http::response([
@@ -93,6 +93,8 @@ test('active subscriptions broadcast only changed option data to the owning priv
     Event::assertDispatched(OptionGreeksUpdated::class, function (OptionGreeksUpdated $event) use ($user): bool {
         return $event->userId === $user->id
             && $event->underlying === 'SENSEX'
+            && $event->data[0]['ltp'] === 1200.0
+            && $event->data[0]['open_interest'] === 14000
             && $event->data[0]['trade_volume'] === 800
             && $event->broadcastOn()[0]->name === "private-users.{$user->id}";
     });

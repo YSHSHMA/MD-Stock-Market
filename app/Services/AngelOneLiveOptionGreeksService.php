@@ -29,6 +29,8 @@ final class AngelOneLiveOptionGreeksService
      *         theta: float,
      *         vega: float,
      *         implied_volatility: float,
+     *         ltp: float,
+     *         open_interest: ?int,
      *         trade_volume: int
      *     }>
      * }
@@ -49,6 +51,14 @@ final class AngelOneLiveOptionGreeksService
                 $credentials['jwt_token'],
                 $credentials['api_key']
             );
+            $contracts = $this->expiryService->getQuotedOptionContracts($underlying, $expiry);
+            $rows = $this->quotedGreeks->addMarketData(
+                $rows,
+                $underlying,
+                $contracts,
+                $credentials['jwt_token'],
+                $credentials['api_key']
+            );
 
             return ['source' => 'angel_one', 'data' => $rows];
         } catch (ConnectionException|RuntimeException $exception) {
@@ -65,7 +75,7 @@ final class AngelOneLiveOptionGreeksService
 
     /**
      * @param  array{api_key: string, jwt_token: string}  $credentials
-     * @return array{source: 'calculated_from_live_quotes', data: list<array<string, int|float|string>>}
+     * @return array{source: 'calculated_from_live_quotes', data: list<array<string, int|float|string|null>>}
      *
      * @throws ConnectionException
      */

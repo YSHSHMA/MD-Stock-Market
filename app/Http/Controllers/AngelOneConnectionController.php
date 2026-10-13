@@ -286,17 +286,6 @@ final class AngelOneConnectionController extends Controller
         ]);
     }
 
-    // public function disconnect(Request $request): JsonResponse
-    // {
-    //     $request->session()->forget('angel_one.connection');
-    //     DB::table('angel_one_market_subscriptions')->where('user_id', $request->user()->id)->delete();
-    //     DB::table('angel_one_connections')->where('user_id', $request->user()->id)->delete();
-
-        
-    //     return response()->json([
-    //         'message' => 'Angel One session disconnected.',
-    //     ]);
-    // }
     public function disconnect(Request $request): JsonResponse
     {
         $userId = $request->user()->id;

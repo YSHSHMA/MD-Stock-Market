@@ -23,6 +23,8 @@ final class OptionGreeksUpdated implements ShouldBroadcastNow
      *     theta: float,
      *     vega: float,
      *     implied_volatility: float,
+     *     ltp: float,
+     *     open_interest: ?int,
      *     trade_volume: int
      * }> $data
      */
@@ -51,7 +53,7 @@ final class OptionGreeksUpdated implements ShouldBroadcastNow
      *     expiry: string,
      *     expiry_date: string,
      *     greeks_source: string,
-     *     data: list<array<string, int|float|string>>,
+     *     data: list<array<string, int|float|string|null>>,
      *     updated_at: string
      * }
      */

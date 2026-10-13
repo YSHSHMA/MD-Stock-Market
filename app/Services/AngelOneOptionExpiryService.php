@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
@@ -46,6 +47,10 @@ final class AngelOneOptionExpiryService
             $catalog['options'][$underlying] ?? [],
             static fn (array $option): bool => $option['date'] === $isoExpiry
         ));
+
+        if ($this->expiryHasPassed($isoExpiry, $underlying)) {
+            throw new RuntimeException("The {$underlying} option expiry {$isoExpiry} has passed. Select a later expiry.");
+        }
 
         if ($options === []) {
             throw new RuntimeException("Angel One has no option contracts for {$underlying} on {$expiry}.");
@@ -103,12 +108,26 @@ final class AngelOneOptionExpiryService
 
         $allExpiries = $this->catalog()['expiries'];
 
-        $expiries = $allExpiries[$underlying] ?? [];
+        $expiries = array_values(array_filter(
+            $allExpiries[$underlying] ?? [],
+            fn (array $expiry): bool => ! $this->expiryHasPassed($expiry['date'], $underlying)
+        ));
         if ($expiries === []) {
             throw new RuntimeException("Angel One currently lists no option expiries for {$underlying}.");
         }
 
         return $expiries;
+    }
+
+    private function expiryHasPassed(string $expiry, string $underlying): bool
+    {
+        $marketClose = $underlying === 'CRUDEOIL' ? '23:30:00' : '15:30:00';
+        $expiryTimestamp = new DateTimeImmutable(
+            $expiry.' '.$marketClose,
+            new DateTimeZone('Asia/Kolkata')
+        );
+
+        return $expiryTimestamp->getTimestamp() <= now()->timestamp;
     }
 
     /**

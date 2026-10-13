@@ -3,6 +3,7 @@
 use App\Models\Ticker;
 use App\Models\Transaction;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -270,41 +271,68 @@ test('connected Angel One users can fetch live option Greeks for a supported und
 
     $expiry = now()->addDays(7)->format('Y-m-d');
     $providerExpiry = strtoupper(now()->parse($expiry)->format('dMY'));
-    Http::fake([
-        'https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json' => Http::response([
-            [
-                'name' => 'NIFTY',
-                'expiry' => $providerExpiry,
-                'instrumenttype' => 'OPTIDX',
-                'exch_seg' => 'NFO',
-            ],
-        ]),
-        'https://apiconnect.angelone.in/rest/secure/angelbroking/marketData/v1/optionGreek' => Http::response([
+    $master = [
+        [
+            'name' => 'NIFTY',
+            'expiry' => $providerExpiry,
+            'instrumenttype' => 'OPTIDX',
+            'exch_seg' => 'NFO',
+        ],
+        ['name' => 'NIFTY', 'token' => '99926000', 'instrumenttype' => 'AMXIDX', 'exch_seg' => 'NSE'],
+        ['name' => 'NIFTY', 'symbol' => "NIFTY{$providerExpiry}25000CE", 'token' => '101', 'expiry' => $providerExpiry, 'strike' => '2500000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ['name' => 'NIFTY', 'symbol' => "NIFTY{$providerExpiry}25000PE", 'token' => '102', 'expiry' => $providerExpiry, 'strike' => '2500000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+    ];
+    Http::fake(function ($request) use ($master) {
+        if (str_contains($request->url(), 'OpenAPIScripMaster.json')) {
+            return Http::response($master);
+        }
+        if (str_contains($request->url(), 'optionGreek')) {
+            return Http::response([
+                'status' => true,
+                'data' => [
+                    [
+                        'strikePrice' => '25000.000000',
+                        'optionType' => 'CE',
+                        'delta' => '0.52',
+                        'gamma' => '0.0003',
+                        'theta' => '-12.4',
+                        'vega' => '18.1',
+                        'impliedVolatility' => '14.6',
+                        'tradeVolume' => '2450',
+                    ],
+                    [
+                        'strikePrice' => '25000.000000',
+                        'optionType' => 'PE',
+                        'delta' => '-0.48',
+                        'gamma' => '0.0003',
+                        'theta' => '-11.9',
+                        'vega' => '17.7',
+                        'impliedVolatility' => '14.8',
+                        'tradeVolume' => '1830',
+                    ],
+                ],
+            ]);
+        }
+
+        $exchangeTokens = $request->data()['exchangeTokens'] ?? [];
+        $exchange = array_key_first($exchangeTokens);
+        $tokens = $exchangeTokens[$exchange] ?? [];
+
+        return Http::response([
             'status' => true,
-            'data' => [
-                [
-                    'strikePrice' => '25000.000000',
-                    'optionType' => 'CE',
-                    'delta' => '0.52',
-                    'gamma' => '0.0003',
-                    'theta' => '-12.4',
-                    'vega' => '18.1',
-                    'impliedVolatility' => '14.6',
-                    'tradeVolume' => '2450',
-                ],
-                [
-                    'strikePrice' => '25000.000000',
-                    'optionType' => 'PE',
-                    'delta' => '-0.48',
-                    'gamma' => '0.0003',
-                    'theta' => '-11.9',
-                    'vega' => '17.7',
-                    'impliedVolatility' => '14.8',
-                    'tradeVolume' => '1830',
-                ],
-            ],
-        ]),
-    ]);
+            'data' => ['fetched' => array_map(
+                static fn (string $token): array => $exchange === 'NSE'
+                    ? ['symbolToken' => $token, 'ltp' => 25000]
+                    : [
+                        'symbolToken' => $token,
+                        'ltp' => $token === '101' ? 145.5 : 132.25,
+                        'opnInterest' => $token === '101' ? 12000 : 15000,
+                        'tradeVolume' => 2450,
+                    ],
+                $tokens
+            )],
+        ]);
+    });
 
     $this->actingAs(User::factory()->create())
         ->withSession([
@@ -330,6 +358,8 @@ test('connected Angel One users can fetch live option Greeks for a supported und
         ->assertJsonPath('greeks_source', 'angel_one')
         ->assertJsonPath('data.0.strike', 25000)
         ->assertJsonPath('data.0.implied_volatility', 14.6)
+        ->assertJsonPath('data.0.ltp', 145.5)
+        ->assertJsonPath('data.0.open_interest', 12000)
         ->assertJsonPath('data.1.option_type', 'PE')
         ->assertJsonMissing(['jwt_token' => 'test-jwt-token']);
 
@@ -380,31 +410,74 @@ test('Angel One returns nearest expiries separately for supported underlyings', 
     Http::assertSentCount(1);
 });
 
+test('Angel One expiry discovery excludes index expiries after the India market close', function () {
+    Cache::forget('angel_one.option_catalog.v3');
+    $today = now('Asia/Kolkata');
+    $todayExpiry = strtoupper($today->format('dMY'));
+    $nextExpiry = strtoupper($today->copy()->addDay()->format('dMY'));
+    $nextDate = $today->copy()->addDay()->format('Y-m-d');
+
+    Http::fake([
+        'https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json' => Http::response([
+            ['name' => 'NIFTY', 'expiry' => $todayExpiry, 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+            ['name' => 'NIFTY', 'expiry' => $nextExpiry, 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ]),
+    ]);
+
+    $this->travelTo(Carbon::parse($today->format('Y-m-d').' 16:00:00', 'Asia/Kolkata'));
+
+    $this->actingAs(User::factory()->create())
+        ->getJson(route('option-chain.angel-one.expiries', ['underlying' => 'NIFTY']))
+        ->assertOk()
+        ->assertJsonPath('expiries.0.date', $nextDate)
+        ->assertJsonCount(1, 'expiries');
+});
+
 test('Angel One requests Greeks for the selected underlying and exact upcoming expiry', function () {
     Cache::forget('angel_one.option_catalog.v3');
     $expiry = now()->addDays(14)->format('Y-m-d');
     $providerExpiry = strtoupper(now()->parse($expiry)->format('dMY'));
-
-    Http::fake([
-        'https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json' => Http::response([
-            ['name' => 'BANKNIFTY', 'expiry' => $providerExpiry, 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
-        ]),
-        'https://apiconnect.angelone.in/rest/secure/angelbroking/marketData/v1/optionGreek' => Http::response([
-            'status' => true,
-            'data' => [
-                [
-                    'strikePrice' => '50000.000000',
-                    'optionType' => 'CE',
-                    'delta' => '0.62',
-                    'gamma' => '0.0004',
-                    'theta' => '-14.1',
-                    'vega' => '20.5',
-                    'impliedVolatility' => '15.3',
-                    'tradeVolume' => '3200',
+    $master = [
+        ['name' => 'BANKNIFTY', 'expiry' => $providerExpiry, 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ['name' => 'BANKNIFTY', 'token' => '99926009', 'instrumenttype' => 'AMXIDX', 'exch_seg' => 'NSE'],
+        ['name' => 'BANKNIFTY', 'symbol' => "BANKNIFTY{$providerExpiry}50000CE", 'token' => '501', 'expiry' => $providerExpiry, 'strike' => '5000000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ['name' => 'BANKNIFTY', 'symbol' => "BANKNIFTY{$providerExpiry}50000PE", 'token' => '502', 'expiry' => $providerExpiry, 'strike' => '5000000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+    ];
+    Http::fake(function ($request) use ($master) {
+        if (str_contains($request->url(), 'OpenAPIScripMaster.json')) {
+            return Http::response($master);
+        }
+        if (str_contains($request->url(), 'optionGreek')) {
+            return Http::response([
+                'status' => true,
+                'data' => [
+                    [
+                        'strikePrice' => '50000.000000',
+                        'optionType' => 'CE',
+                        'delta' => '0.62',
+                        'gamma' => '0.0004',
+                        'theta' => '-14.1',
+                        'vega' => '20.5',
+                        'impliedVolatility' => '15.3',
+                        'tradeVolume' => '3200',
+                    ],
                 ],
-            ],
-        ]),
-    ]);
+            ]);
+        }
+
+        $exchangeTokens = $request->data()['exchangeTokens'] ?? [];
+        $exchange = array_key_first($exchangeTokens);
+
+        return Http::response([
+            'status' => true,
+            'data' => ['fetched' => array_map(
+                static fn (string $token): array => $exchange === 'NSE'
+                    ? ['symbolToken' => $token, 'ltp' => 50000]
+                    : ['symbolToken' => $token, 'ltp' => 250, 'opnInterest' => 5200, 'tradeVolume' => 3200],
+                $exchangeTokens[$exchange] ?? []
+            )],
+        ]);
+    });
 
     $this->actingAs(User::factory()->create())
         ->withSession([
@@ -424,7 +497,9 @@ test('Angel One requests Greeks for the selected underlying and exact upcoming e
         ->assertJsonPath('underlying', 'BANKNIFTY')
         ->assertJsonPath('expiry_date', $expiry)
         ->assertJsonPath('greeks_source', 'angel_one')
-        ->assertJsonPath('data.0.option_type', 'CE');
+        ->assertJsonPath('data.0.option_type', 'CE')
+        ->assertJsonPath('data.0.ltp', 250)
+        ->assertJsonPath('data.0.open_interest', 5200);
 
     Http::assertSent(function ($request) use ($providerExpiry): bool {
         return $request->url() === 'https://apiconnect.angelone.in/rest/secure/angelbroking/marketData/v1/optionGreek'
@@ -435,7 +510,8 @@ test('Angel One requests Greeks for the selected underlying and exact upcoming e
     });
 });
 
-test('NIFTY and BANKNIFTY native Greeks do not depend on contract-master expiry discovery', function () {
+test('NIFTY and BANKNIFTY native Greeks include quote-based LTP and open interest', function () {
+    Cache::forget('angel_one.option_catalog.v3');
     config([
         'services.angel_one.client_local_ip' => '192.168.1.20',
         'services.angel_one.client_public_ip' => '203.0.113.20',
@@ -443,21 +519,48 @@ test('NIFTY and BANKNIFTY native Greeks do not depend on contract-master expiry 
     ]);
 
     $expiry = now()->addDays(14)->format('Y-m-d');
-    Http::fake([
-        'https://apiconnect.angelone.in/rest/secure/angelbroking/marketData/v1/optionGreek' => Http::response([
+    $providerExpiry = strtoupper(now()->parse($expiry)->format('dMY'));
+    $master = [
+        ['name' => 'NIFTY', 'token' => '99926000', 'instrumenttype' => 'AMXIDX', 'exch_seg' => 'NSE'],
+        ['name' => 'BANKNIFTY', 'token' => '99926009', 'instrumenttype' => 'AMXIDX', 'exch_seg' => 'NSE'],
+        ['name' => 'NIFTY', 'symbol' => "NIFTY{$providerExpiry}50000CE", 'token' => '101', 'expiry' => $providerExpiry, 'strike' => '5000000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ['name' => 'NIFTY', 'symbol' => "NIFTY{$providerExpiry}50000PE", 'token' => '102', 'expiry' => $providerExpiry, 'strike' => '5000000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ['name' => 'BANKNIFTY', 'symbol' => "BANKNIFTY{$providerExpiry}50000CE", 'token' => '201', 'expiry' => $providerExpiry, 'strike' => '5000000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+        ['name' => 'BANKNIFTY', 'symbol' => "BANKNIFTY{$providerExpiry}50000PE", 'token' => '202', 'expiry' => $providerExpiry, 'strike' => '5000000', 'instrumenttype' => 'OPTIDX', 'exch_seg' => 'NFO'],
+    ];
+    Http::fake(function ($request) use ($master) {
+        if (str_contains($request->url(), 'OpenAPIScripMaster.json')) {
+            return Http::response($master);
+        }
+        if (str_contains($request->url(), 'optionGreek')) {
+            return Http::response([
+                'status' => true,
+                'data' => [[
+                    'strikePrice' => '50000.000000',
+                    'optionType' => 'CE',
+                    'delta' => '0.62',
+                    'gamma' => '0.0004',
+                    'theta' => '-14.1',
+                    'vega' => '20.5',
+                    'impliedVolatility' => '15.3',
+                    'tradeVolume' => '3200',
+                ]],
+            ]);
+        }
+
+        $exchangeTokens = $request->data()['exchangeTokens'] ?? [];
+        $exchange = array_key_first($exchangeTokens);
+
+        return Http::response([
             'status' => true,
-            'data' => [[
-                'strikePrice' => '50000.000000',
-                'optionType' => 'CE',
-                'delta' => '0.62',
-                'gamma' => '0.0004',
-                'theta' => '-14.1',
-                'vega' => '20.5',
-                'impliedVolatility' => '15.3',
-                'tradeVolume' => '3200',
-            ]],
-        ]),
-    ]);
+            'data' => ['fetched' => array_map(
+                static fn (string $token): array => $exchange === 'NSE'
+                    ? ['symbolToken' => $token, 'ltp' => 50000]
+                    : ['symbolToken' => $token, 'ltp' => 180, 'opnInterest' => 8000, 'tradeVolume' => 3200],
+                $exchangeTokens[$exchange] ?? []
+            )],
+        ]);
+    });
 
     $user = User::factory()->create();
     foreach (['NIFTY', 'BANKNIFTY'] as $underlying) {
@@ -478,12 +581,12 @@ test('NIFTY and BANKNIFTY native Greeks do not depend on contract-master expiry 
             ->assertOk()
             ->assertJsonPath('underlying', $underlying)
             ->assertJsonPath('greeks_source', 'angel_one')
-            ->assertJsonPath('data.0.strike', 50000);
+            ->assertJsonPath('data.0.strike', 50000)
+            ->assertJsonPath('data.0.ltp', 180)
+            ->assertJsonPath('data.0.open_interest', 8000);
     }
 
-    Http::assertSentCount(2);
-    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'OpenAPIScripMaster.json')
-    );
+    Http::assertSentCount(7);
 });
 
 test('NIFTY and BANKNIFTY fall back to live quotes when native Greeks are unavailable', function () {
@@ -607,13 +710,13 @@ test('SENSEX and CRUDEOIL use quotes to calculate Greeks from their correct mark
         $quotes = match ([$exchange, $tokens]) {
             ['BSE', ['99919000']] => [['symbolToken' => '99919000', 'ltp' => 72000]],
             ['BFO', ['301', '302']] => [
-                ['symbolToken' => '301', 'ltp' => 1200, 'tradeVolume' => 800],
-                ['symbolToken' => '302', 'ltp' => 1100, 'tradeVolume' => 700],
+                ['symbolToken' => '301', 'ltp' => 1200, 'opnInterest' => 14000, 'tradeVolume' => 800],
+                ['symbolToken' => '302', 'ltp' => 1100, 'opnInterest' => 16000, 'tradeVolume' => 700],
             ],
             ['MCX', ['501']] => [['symbolToken' => '501', 'ltp' => 7000]],
             ['MCX', ['401', '402']] => [
-                ['symbolToken' => '401', 'ltp' => 180, 'tradeVolume' => 500],
-                ['symbolToken' => '402', 'ltp' => 170, 'tradeVolume' => 450],
+                ['symbolToken' => '401', 'ltp' => 180, 'opnInterest' => 4000, 'tradeVolume' => 500],
+                ['symbolToken' => '402', 'ltp' => 170, 'opnInterest' => 5000, 'tradeVolume' => 450],
             ],
             default => [],
         };
@@ -641,8 +744,10 @@ test('SENSEX and CRUDEOIL use quotes to calculate Greeks from their correct mark
             ->assertJsonPath('greeks_source', 'calculated_from_live_quotes')
             ->assertJsonPath('data.0.option_type', 'CE')
             ->assertJsonPath('data.0.trade_volume', $underlying === 'SENSEX' ? 800 : 500)
+            ->assertJsonPath('data.0.ltp', $underlying === 'SENSEX' ? 1200 : 180)
+            ->assertJsonPath('data.0.open_interest', $underlying === 'SENSEX' ? 14000 : 4000)
             ->assertJsonStructure([
-                'data' => [['strike', 'option_type', 'delta', 'gamma', 'theta', 'vega', 'implied_volatility']],
+                'data' => [['strike', 'option_type', 'delta', 'gamma', 'theta', 'vega', 'implied_volatility', 'ltp', 'open_interest', 'trade_volume']],
             ]);
     }
 

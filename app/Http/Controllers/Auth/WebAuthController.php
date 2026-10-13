@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Illuminate\Support\Str;
+use App\Http\Controllers\AngelOneConnectionController;
 
 final class WebAuthController extends Controller
 {
@@ -70,12 +71,26 @@ final class WebAuthController extends Controller
         return redirect()->route('dashboard');
     }
 
-    public function logout(Request $request): RedirectResponse
-    {
-        Auth::logout();
+
+    public function logout(
+        Request $request,
+        AngelOneConnectionController $angelOneController
+    ): RedirectResponse {
+        // Attempt to disconnect Angel One before logging out.
+        try {
+            $angelOneController->disconnect($request);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        // Always log out the Laravel user.
+        Auth::guard('web')->logout();
+
+        // Invalidate the session and regenerate the CSRF token.
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
     }
+
 }

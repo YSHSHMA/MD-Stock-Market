@@ -29,6 +29,8 @@ final class AngelOneQuotedOptionGreeksService
      *     theta: float,
      *     vega: float,
      *     implied_volatility: float,
+     *     ltp: float,
+     *     open_interest: ?int,
      *     trade_volume: int
      * }>
      *
@@ -41,20 +43,7 @@ final class AngelOneQuotedOptionGreeksService
         string $jwtToken,
         string $apiKey
     ): array {
-        $identity = [
-            'client_local_ip' => config('services.angel_one.client_local_ip'),
-            'client_public_ip' => config('services.angel_one.client_public_ip'),
-            'mac_address' => config('services.angel_one.mac_address'),
-        ];
-
-        if (
-            ! filter_var($identity['client_local_ip'], FILTER_VALIDATE_IP)
-            || ! filter_var($identity['client_public_ip'], FILTER_VALIDATE_IP)
-            || ! is_string($identity['mac_address'])
-            || ! preg_match('/^[0-9a-fA-F]{2}([:-][0-9a-fA-F]{2}){5}$/', $identity['mac_address'])
-        ) {
-            throw new RuntimeException('Angel One network identity is incomplete. Check the server environment configuration.');
-        }
+        $identity = $this->networkIdentity();
 
         $referenceQuotes = $this->fetchQuotes(
             [$contracts['reference']['exchange'] => [$contracts['reference']['token']]],
@@ -143,6 +132,8 @@ final class AngelOneQuotedOptionGreeksService
                 'theta' => $greeks['theta'],
                 'vega' => $greeks['vega'],
                 'implied_volatility' => $impliedVolatility * 100,
+                'ltp' => $price,
+                'open_interest' => $this->openInterest($quote),
                 'trade_volume' => max(0, (int) ($quote['tradeVolume'] ?? 0)),
             ];
         }
@@ -157,6 +148,116 @@ final class AngelOneQuotedOptionGreeksService
         }
 
         return $rows;
+    }
+
+    /**
+     * Add quote fields to native Greeks, limiting the quote request to the closest 24 strikes.
+     *
+     * @param  list<array<string, int|float|string>>  $rows
+     * @param array{
+     *     options: list<array{token: string, symbol: string, strike: float, option_type: 'CE'|'PE'}>,
+     *     reference: array{exchange: string, token: string}
+     * } $contracts
+     * @param  array<string, string>  $credentials
+     * @return list<array<string, int|float|string|null>>
+     *
+     * @throws ConnectionException
+     */
+    public function addMarketData(
+        array $rows,
+        string $underlying,
+        array $contracts,
+        string $jwtToken,
+        string $apiKey
+    ): array {
+        $identity = $this->networkIdentity();
+        $referenceQuotes = $this->fetchQuotes(
+            [$contracts['reference']['exchange'] => [$contracts['reference']['token']]],
+            $jwtToken,
+            $apiKey,
+            $identity
+        );
+        $reference = $this->quoteForToken($referenceQuotes, $contracts['reference']['token']);
+        $underlyingPrice = $this->positiveNumber($reference['ltp'] ?? null);
+
+        if ($underlyingPrice === null) {
+            throw new RuntimeException("Angel One returned no live reference price for {$underlying}.");
+        }
+
+        $strikes = array_values(array_unique(array_map(
+            static fn (array $row): float => (float) $row['strike'],
+            $rows
+        )));
+        usort($strikes, static fn (float $left, float $right): int => abs($left - $underlyingPrice) <=> abs($right - $underlyingPrice));
+        $nearbyStrikes = array_fill_keys(
+            array_map(static fn (float $strike): string => number_format($strike, 8, '.', ''), array_slice($strikes, 0, 24)),
+            true
+        );
+        $rowTypes = [];
+        foreach ($rows as $row) {
+            $rowTypes[number_format((float) $row['strike'], 8, '.', '').':'.$row['option_type']] = true;
+        }
+
+        $options = array_values(array_filter(
+            $contracts['options'],
+            static fn (array $option): bool => isset($nearbyStrikes[number_format($option['strike'], 8, '.', '')])
+                && isset($rowTypes[number_format($option['strike'], 8, '.', '').':'.$option['option_type']])
+        ));
+        if ($options === []) {
+            throw new RuntimeException("Angel One has no contract tokens matching {$underlying} option Greeks.");
+        }
+
+        usleep(1_100_000);
+        $optionExchange = match ($underlying) {
+            'NIFTY', 'BANKNIFTY' => 'NFO',
+            'SENSEX' => 'BFO',
+            'CRUDEOIL' => 'MCX',
+        };
+        $optionQuotes = $this->fetchQuotes(
+            [$optionExchange => array_column($options, 'token')],
+            $jwtToken,
+            $apiKey,
+            $identity
+        );
+        $quotesByContract = [];
+
+        foreach ($options as $option) {
+            $quote = $this->quoteForToken($optionQuotes, $option['token']);
+            $ltp = $this->positiveNumber($quote['ltp'] ?? null);
+            if ($ltp === null) {
+                continue;
+            }
+
+            $quotesByContract[number_format($option['strike'], 8, '.', '').':'.$option['option_type']] = [
+                'ltp' => $ltp,
+                'open_interest' => $this->openInterest($quote),
+                'trade_volume' => is_numeric($quote['tradeVolume'] ?? null)
+                    ? max(0, (int) $quote['tradeVolume'])
+                    : null,
+            ];
+        }
+
+        $enrichedRows = [];
+        foreach ($rows as $row) {
+            $key = number_format((float) $row['strike'], 8, '.', '').':'.$row['option_type'];
+            if (! isset($quotesByContract[$key])) {
+                continue;
+            }
+
+            $quote = $quotesByContract[$key];
+            $enrichedRows[] = [
+                ...$row,
+                'ltp' => $quote['ltp'],
+                'open_interest' => $quote['open_interest'],
+                'trade_volume' => $quote['trade_volume'] ?? $row['trade_volume'],
+            ];
+        }
+
+        if ($enrichedRows === []) {
+            throw new RuntimeException("Angel One returned no live option quotes for {$underlying}.");
+        }
+
+        return $enrichedRows;
     }
 
     /**
@@ -225,6 +326,47 @@ final class AngelOneQuotedOptionGreeksService
     private function positiveNumber(mixed $value): ?float
     {
         return is_numeric($value) && (float) $value > 0 ? (float) $value : null;
+    }
+
+    /**
+     * @return array{client_local_ip: string, client_public_ip: string, mac_address: string}
+     */
+    private function networkIdentity(): array
+    {
+        $identity = [
+            'client_local_ip' => config('services.angel_one.client_local_ip'),
+            'client_public_ip' => config('services.angel_one.client_public_ip'),
+            'mac_address' => config('services.angel_one.mac_address'),
+        ];
+
+        if (
+            ! is_string($identity['client_local_ip'])
+            || ! filter_var($identity['client_local_ip'], FILTER_VALIDATE_IP)
+            || ! is_string($identity['client_public_ip'])
+            || ! filter_var($identity['client_public_ip'], FILTER_VALIDATE_IP)
+            || ! is_string($identity['mac_address'])
+            || ! preg_match('/^[0-9a-fA-F]{2}([:-][0-9a-fA-F]{2}){5}$/', $identity['mac_address'])
+        ) {
+            throw new RuntimeException('Angel One network identity is incomplete. Check the server environment configuration.');
+        }
+
+        return $identity;
+    }
+
+    /**
+     * @param  array<string, mixed>  $quote
+     */
+    private function openInterest(array $quote): ?int
+    {
+        $value = $quote['opnInterest'] ?? $quote['openInterest'] ?? null;
+        if ($value === null) {
+            return null;
+        }
+        if (! is_numeric($value) || (float) $value < 0) {
+            throw new RuntimeException('Angel One returned an invalid option open-interest value.');
+        }
+
+        return (int) $value;
     }
 
     private function impliedVolatility(
