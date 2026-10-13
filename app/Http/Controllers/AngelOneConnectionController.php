@@ -135,6 +135,7 @@ final class AngelOneConnectionController extends Controller
             $expiries = $expiryService->getExpiries($input['underlying']);
             if (! in_array($input['expiry'], array_column($expiries, 'date'), true)) {
                 return response()->json([
+                    'code' => 'expiry_unavailable',
                     'message' => 'That expiry is not listed for this underlying.',
                 ], 422);
             }
@@ -285,14 +286,123 @@ final class AngelOneConnectionController extends Controller
         ]);
     }
 
+    // public function disconnect(Request $request): JsonResponse
+    // {
+    //     $request->session()->forget('angel_one.connection');
+    //     DB::table('angel_one_market_subscriptions')->where('user_id', $request->user()->id)->delete();
+    //     DB::table('angel_one_connections')->where('user_id', $request->user()->id)->delete();
+
+        
+    //     return response()->json([
+    //         'message' => 'Angel One session disconnected.',
+    //     ]);
+    // }
     public function disconnect(Request $request): JsonResponse
     {
-        $request->session()->forget('angel_one.connection');
-        DB::table('angel_one_market_subscriptions')->where('user_id', $request->user()->id)->delete();
-        DB::table('angel_one_connections')->where('user_id', $request->user()->id)->delete();
+        $userId = $request->user()->id;
 
+        // 1. Retrieve the saved Angel One connection.
+        $connection = DB::table('angel_one_connections')
+            ->where('user_id', $userId)
+            ->first();
+
+        $logoutConfirmed = false;
+
+        // 2. Call Angel One logout before deleting the saved credentials.
+        if ($connection !== null) {
+            try {
+                $secrets = json_decode(
+                    Crypt::decryptString($connection->encrypted_secrets),
+                    true,
+                    flags: JSON_THROW_ON_ERROR
+                );
+
+                $apiKey = $secrets['api_key'] ?? null;
+                $jwtToken = $secrets['jwt_token'] ?? null;
+
+                if (
+                    is_string($apiKey) && $apiKey !== ''
+                    && is_string($jwtToken) && $jwtToken !== ''
+                ) {
+                    $response = Http::timeout(10)
+                        ->acceptJson()
+                        ->withToken($jwtToken)
+                        ->withHeaders([
+                            'X-UserType' => 'USER',
+                            'X-SourceID' => 'WEB',
+                            'X-ClientLocalIP' => config(
+                                'services.angel_one.client_local_ip'
+                            ),
+                            'X-ClientPublicIP' => config(
+                                'services.angel_one.client_public_ip'
+                            ),
+                            'X-MACAddress' => config(
+                                'services.angel_one.mac_address'
+                            ),
+                            'X-PrivateKey' => $apiKey,
+                        ])
+                        ->post(
+                            'https://apiconnect.angelone.in/rest/secure/angelbroking/user/v1/logout',
+                            [
+                                'clientcode' => $connection->client_code,
+                            ]
+                        );
+
+                    $payload = $response->json();
+
+                    // HTTP success alone is not enough: check API payload.
+                    $logoutConfirmed = $response->successful()
+                        && is_array($payload)
+                        && ($payload['status'] ?? false) === true;
+
+                    if (!$logoutConfirmed) {
+                        Log::warning('Angel One logout was not confirmed.', [
+                            'user_id' => $userId,
+                            'http_status' => $response->status(),
+                            'provider_status' => is_array($payload)
+                                ? ($payload['status'] ?? null)
+                                : null,
+                            'provider_message' => is_array($payload)
+                                ? ($payload['message'] ?? null)
+                                : null,
+                        ]);
+                    }
+                } else {
+                    Log::warning('Angel One logout skipped because credentials are incomplete.', [
+                        'user_id' => $userId,
+                    ]);
+                }
+            } catch (ConnectionException | DecryptException | JsonException $exception) {
+                Log::warning('Angel One logout request could not be completed.', [
+                    'user_id' => $userId,
+                    'error' => $exception->getMessage(),
+                ]);
+            } catch (\Throwable $exception) {
+                Log::error('Unexpected error during Angel One logout.', [
+                    'user_id' => $userId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        // 3. Always clear the local connection, even if provider logout fails.
+        $request->session()->forget('angel_one.connection');
+
+        DB::table('angel_one_market_subscriptions')
+            ->where('user_id', $userId)
+            ->delete();
+
+        DB::table('angel_one_connections')
+            ->where('user_id', $userId)
+            ->delete();
+
+        // 4. Return the logout result.
         return response()->json([
-            'message' => 'Angel One session disconnected.',
+            'message' => $logoutConfirmed
+                ? 'Angel One logout succeeded and your local connection was removed.'
+                : 'Your local connection was removed, but Angel One logout could not be confirmed.',
+            'disconnected' => true,
+            'angel_one_logout_confirmed' => $logoutConfirmed,
         ]);
     }
 }

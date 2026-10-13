@@ -45,6 +45,29 @@
     let angelOneConnected = config.angelOne.connected;
     let optionChainRequestId = 0;
 
+    // WebSocket connection status indicator
+    const wsStatus = document.querySelector('#ws-status');
+    const wsLabel = document.querySelector('#ws-label');
+
+    function updateWsStatus(state) {
+        if (!wsStatus) return;
+        const states = {
+            connected: { label: 'Live', cls: 'ws-live', title: 'WebSocket connected – receiving live updates' },
+            connecting: { label: 'Connecting…', cls: 'ws-connecting', title: 'Connecting to the live data server' },
+            disconnected: { label: 'Offline', cls: 'ws-offline', title: 'WebSocket disconnected – will retry' },
+            unavailable: { label: 'Unavailable', cls: 'ws-offline', title: 'Live data server is not reachable' },
+        };
+        const info = states[state] || states.connecting;
+        wsStatus.title = info.title;
+        wsStatus.className = `market-status ${info.cls}`;
+        wsLabel.textContent = info.label;
+    }
+
+    if (window.marketboardEcho) {
+        const pusherState = window.marketboardEcho.connector?.pusher?.connection?.state;
+        updateWsStatus(pusherState || 'connecting');
+    }
+
     const sidebarToggle = document.querySelector('#sidebar-toggle');
     const sidebarCollapsed = localStorage.getItem('marketboard-sidebar-collapsed') === 'true';
     document.querySelector('.app-shell').classList.toggle('sidebar-collapsed', sidebarCollapsed);
@@ -120,7 +143,9 @@
 
         if (!response.ok) {
             const validationMessage = payload.errors && Object.values(payload.errors).flat()[0];
-            throw new Error(validationMessage || payload.message || 'Angel One connection failed.');
+            const error = new Error(validationMessage || payload.message || 'Angel One connection failed.');
+            error.code = payload.code;
+            throw error;
         }
 
         return payload;
@@ -143,6 +168,12 @@
             liveSubscriptionSelection = `${underlying}:${expiry}`;
             liveSubscriptionErrorShown = false;
         } catch (error) {
+            if (error.code === 'expiry_unavailable') {
+                liveSubscriptionSelection = '';
+                await loadAngelOneExpiries();
+                return;
+            }
+
             optionElements.updated.textContent = 'Live updates unavailable';
             if (!liveSubscriptionErrorShown) {
                 showToast(error.message, true);
@@ -182,6 +213,7 @@
     });
 
     window.addEventListener('marketboard:realtime-state', (event) => {
+        updateWsStatus(event.detail.current);
         if (event.detail.current === 'connected') {
             startLiveSubscription();
         }
@@ -200,7 +232,7 @@
         ++optionChainRequestId;
         optionElements.expiry.disabled = true;
         optionElements.expiry.replaceChildren(new Option('Loading expiries…', ''));
-        optionElements.body.innerHTML = '<tr><td colspan="8" class="chain-loading"><span class="spinner"></span> Loading listed expiries…</td></tr>';
+        optionElements.body.innerHTML = '<tr><td colspan="10" class="chain-loading"><span class="spinner"></span> Loading listed expiries…</td></tr>';
 
         try {
             const url = new URL(config.angelOne.expiriesUrl, window.location.origin);
@@ -235,7 +267,7 @@
         } catch (error) {
             if (requestId !== optionExpiryRequestId || underlying !== optionElements.underlying.value) return;
             optionElements.expiry.replaceChildren(new Option('Expiries unavailable', ''));
-            optionElements.body.innerHTML = `<tr><td colspan="8" class="chain-error">${escapeHtml(error.message)}</td></tr>`;
+            optionElements.body.innerHTML = `<tr><td colspan="10" class="chain-error">${escapeHtml(error.message)}</td></tr>`;
             optionElements.updated.textContent = 'Could not load expiries';
             showToast(error.message, true);
         }
@@ -465,11 +497,13 @@
     }
 
     function formatContracts(value) {
+        if (value === null || value === undefined || value === '') return '—';
+
         return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
     }
 
     function prepareAngelOneGreeksView(source = 'angel_one') {
-        optionElements.tableHead.innerHTML = '<tr class="chain-columns-row"><th>TYPE</th><th>STRIKE</th><th>DELTA</th><th>GAMMA</th><th>THETA</th><th>VEGA</th><th>IV</th><th>VOLUME</th></tr>';
+        optionElements.tableHead.innerHTML = '<tr class="chain-columns-row"><th>TYPE</th><th>STRIKE</th><th>LTP</th><th>OPEN INT.</th><th>VOLUME</th><th>IV</th><th>DELTA</th><th>GAMMA</th><th>THETA</th><th>VEGA</th></tr>';
         optionElements.summary.hidden = true;
         const quoteDerived = source === 'calculated_from_live_quotes';
         optionElements.badge.innerHTML = quoteDerived
@@ -477,11 +511,11 @@
             : '<span></span> ANGEL ONE · LIVE GREEKS';
         optionElements.badge.classList.add('live-badge');
         optionElements.description.textContent = quoteDerived
-            ? 'Greeks calculated from Angel One live option quotes for the selected underlying and expiry.'
-            : 'Live option Greeks by strike for the selected underlying and expiry.';
+            ? 'Option LTP and open interest from Angel One quotes, with Greeks calculated for the selected underlying and expiry.'
+            : 'Option LTP and open interest from Angel One quotes alongside live Greeks by strike.';
         optionElements.footerNote.textContent = quoteDerived
-            ? 'These Greeks are calculated locally from live option LTP using Black-Scholes/Black-76 because native Greeks were unavailable. Stale or illiquid quotes can affect the estimates.'
-            : 'Angel One Greeks endpoint does not provide LTP, open interest, or underlying spot. Values are market data; verify before trading.';
+            ? 'Greeks are estimates calculated from live quotes using Black-Scholes/Black-76. Stale or illiquid quotes can affect the values; verify before trading.'
+            : 'LTP and open interest are from Angel One FULL quotes; Greeks are from Angel One. Market values may be delayed.';
     }
 
     function renderAngelOneGreeks(response) {
@@ -500,22 +534,24 @@
         }).format(new Date())}`;
 
         if (!rows.length) {
-            optionElements.body.innerHTML = '<tr><td colspan="8" class="chain-error">Angel One returned no option Greeks for this underlying and expiry.</td></tr>';
+            optionElements.body.innerHTML = '<tr><td colspan="10" class="chain-error">Angel One returned no live option data for this underlying and expiry.</td></tr>';
             return;
         }
 
-        const number = (value) => Number(value).toLocaleString(undefined, {
-            maximumFractionDigits: 6,
-        });
+        const number = (value) => value === null || value === undefined || value === ''
+            ? '—'
+            : Number(value).toLocaleString(undefined, { maximumFractionDigits: 6 });
         optionElements.body.innerHTML = rows.map((row) => `<tr>
             <td>${row.option_type}</td>
             <td class="strike-cell">${formatContracts(row.strike)}</td>
+            <td>${row.ltp === null || row.ltp === undefined ? '—' : optionMoney(row.ltp)}</td>
+            <td>${formatContracts(row.open_interest)}</td>
+            <td>${formatContracts(row.trade_volume)}</td>
+            <td>${number(row.implied_volatility)}%</td>
             <td>${number(row.delta)}</td>
             <td>${number(row.gamma)}</td>
             <td>${number(row.theta)}</td>
             <td>${number(row.vega)}</td>
-            <td>${number(row.implied_volatility)}%</td>
-            <td>${formatContracts(row.trade_volume)}</td>
         </tr>`).join('');
     }
 
@@ -534,7 +570,7 @@
         const expiry = optionElements.expiry.value;
         const requestId = ++optionChainRequestId;
 
-        optionElements.body.innerHTML = `<tr><td colspan="${angelOneConnected ? 8 : 11}" class="chain-loading"><span class="spinner"></span> Loading ${angelOneConnected ? 'live Angel One Greeks' : 'simulated option chain'}…</td></tr>`;
+        optionElements.body.innerHTML = `<tr><td colspan="${angelOneConnected ? 10 : 11}" class="chain-loading"><span class="spinner"></span> Loading ${angelOneConnected ? 'live Angel One option data' : 'simulated option chain'}…</td></tr>`;
 
         try {
             if (angelOneConnected) {
@@ -544,7 +580,7 @@
                         : 'angel_one'
                 );
                 if (!expiry) {
-                    optionElements.body.innerHTML = '<tr><td colspan="8" class="chain-error">Choose an expiry listed by Angel One for this underlying.</td></tr>';
+                    optionElements.body.innerHTML = '<tr><td colspan="10" class="chain-error">Choose an expiry listed by Angel One for this underlying.</td></tr>';
                     optionElements.updated.textContent = 'Waiting for an expiry';
                     return;
                 }

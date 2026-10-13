@@ -168,6 +168,64 @@
     scroll-margin-top: 0;
 }
 
+
+/* WebSocket connection status */
+.market-status .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; background: #94a3b8; }
+.ws-live .status-dot { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.5); }
+.ws-connecting .status-dot { background: #f59e0b; animation: ws-pulse 1.2s ease-in-out infinite; }
+.ws-offline .status-dot { background: #ef4444; }
+@keyframes ws-pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+
+.logout-form {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+}
+
+.logout-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border: 1px solid #fee2e2;
+    border-radius: 8px;
+    background: #fff;
+    color: #dc2626;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+    background: #163e30;
+    color: #fff;
+    border-color: #163e30;
+    box-shadow: 0 3px 8px rgba(220, 38, 38, 0.15);
+}
+
+.logout-btn:active {
+    transform: scale(0.97);
+}
+
+.logout-btn:focus-visible {
+    outline: 2px solid #163e30;
+    outline-offset: 3px;
+}
+
+@media (max-width: 576px) {
+    .logout-btn {
+        padding: 8px 10px;
+        gap: 5px;
+        font-size: 12px;
+    }
+}
+
+
 .option-chain-focus .option-chain-heading {
     flex: 0 0 auto;
     padding: 12px 17px 10px;
@@ -604,13 +662,15 @@
 }
 
 .option-chain-table-wrap {
-    overflow-x: auto;
+    max-height: min(65vh, 720px);
+    overflow: auto;
+    scrollbar-gutter: stable;
     border-top: 1px solid #edf1ee;
 }
 
 .option-chain-table {
     width: 100%;
-    min-width: 900px;
+    min-width: 1180px;
     border-collapse: collapse;
     text-align: right;
     font-variant-numeric: tabular-nums;

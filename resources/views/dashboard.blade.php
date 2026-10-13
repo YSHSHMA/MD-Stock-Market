@@ -31,7 +31,14 @@
         <main class="main-content">
             <header class="topbar">
                 <div class="breadcrumb"><span>Workspace</span><span class="breadcrumb-sep">/</span><strong>Overview</strong></div>
-                <div class="topbar-right"><span class="market-status"><span class="status-dot"></span> Portfolio tracker</span><span class="topbar-divider"></span><span class="topbar-date" id="today-date"></span></div>
+                <div class="topbar-right"><span class="market-status" id="ws-status" title="WebSocket status"><span class="status-dot" id="ws-dot"></span> <span id="ws-label">Connecting…</span></span><span class="topbar-divider"></span><span class="topbar-date" id="today-date"></span>
+             <form action="{{ route('logout') }}" method="POST" class="logout-form">
+                @csrf
+                <button type="submit" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </button>
+            </form>
             </header>
             <div class="page-content">
                 <section class="welcome-row">
