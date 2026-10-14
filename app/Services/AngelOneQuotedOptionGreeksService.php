@@ -135,6 +135,7 @@ final class AngelOneQuotedOptionGreeksService
                 'ltp' => $price,
                 'open_interest' => $this->openInterest($quote),
                 'trade_volume' => max(0, (int) ($quote['tradeVolume'] ?? 0)),
+                'market_data' => $quote,
             ];
         }
 
