@@ -283,10 +283,187 @@
 
 .option-chain-heading {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 19px 20px 17px;
+    padding: 12px 20px;
+    flex-wrap: nowrap;
+}
+
+.option-chain-heading.single-line-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 14px;
+    border-bottom: 1px solid #edf1ee;
+}
+
+.option-chain-heading .header-left-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.option-chain-heading .header-left-group p {
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;
+    color: #8c9790;
+}
+
+.option-chain-heading .header-right-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.option-chain-heading .header-right-group .angel-one-tools {
+    margin: 0;
+}
+
+.option-chain-heading .icon-button {
+    width: 26px;
+    height: 26px;
+    font-size: 13px;
+}
+
+.chain-source-note {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    color: #8d9892;
+    font-size: 8px;
+}
+
+.angel-one-connection > summary {
+    display: inline-flex;
+    min-height: 24px;
+    align-items: center;
+    gap: 5px;
+    padding: 0 8px;
+    border: 1px solid #dfe9e2;
+    border-radius: 5px;
+    background: #fff;
+    color: #397256;
+    cursor: pointer;
+    font-size: 8px;
+    font-weight: 700;
+    list-style: none;
+    white-space: nowrap;
+}
+
+.option-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+}
+
+.option-title-row h2 {
+    margin: 0;
+    color: #28342e;
+    font: 700 13px Manrope, sans-serif;
+    letter-spacing: -.2px;
+}
+
+.sample-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border: 1px solid #f1dfb8;
+    border-radius: 4px;
+    background: #fff9ec;
+    color: #98691a;
+    font-size: 7.5px;
+    font-weight: 800;
+    letter-spacing: .4px;
+}
+
+.option-chain-controls.single-line-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 4px 14px;
+    background: #fbfcfb;
+    border-top: none;
+    border-bottom: 1px solid #edf1ee;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+}
+
+.market-inputs-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.market-inputs-row .option-select-label {
+    min-width: 90px;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    font-size: 7.5px;
+    font-weight: 800;
+    letter-spacing: .4px;
+    color: #8c9790;
+}
+
+.market-inputs-row .option-select-label select {
+    min-width: 95px;
+    height: 25px;
+    padding: 0 18px 0 6px;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 5px;
+}
+
+.option-summary-grid.single-line-metrics {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+.option-summary-grid.single-line-metrics .option-summary-item {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 5px;
+    min-height: 0;
+    padding: 3px 8px;
+    border: 1px solid #edf1ee;
+    border-radius: 5px;
+    background: #fff;
+    white-space: nowrap;
+}
+
+.option-summary-grid.single-line-metrics .option-summary-item span {
+    font-size: 7.5px;
+    font-weight: 700;
+    color: #8c9790;
+    letter-spacing: .3px;
+}
+
+.option-summary-grid.single-line-metrics .option-summary-item strong {
+    font-size: 11px;
+    font-weight: 700;
+    color: #28342e;
+}
+
+.option-summary-grid.single-line-metrics .option-summary-item small {
+    display: none;
 }
 
 .option-title-row {
@@ -655,7 +832,7 @@
 }
 
 .option-chain-table-wrap {
-    max-height: min(65vh, 720px);
+    max-height: calc(100vh - 180px);
     overflow: auto;
     scrollbar-gutter: stable;
     border-top: 1px solid #edf1ee;
@@ -663,7 +840,7 @@
 
 .option-chain-table {
     width: 100%;
-    min-width: 1100px;
+    min-width: 1050px;
     border-collapse: collapse;
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -674,16 +851,16 @@
 }
 
 .chain-group-row th {
-    height: 34px;
-    padding: 0 9px;
-    font-size: 9px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 8px;
     font-weight: 800;
-    letter-spacing: .6px;
+    letter-spacing: .5px;
 }
 
 .chain-group-row th span {
-    margin-left: 6px;
-    font-size: 7px;
+    margin-left: 4px;
+    font-size: 6.5px;
     font-weight: 600;
     opacity: .7;
 }
@@ -703,7 +880,7 @@
 }
 
 .chain-group-row .strike-group {
-    width: 94px;
+    width: 80px;
     border-right: 1px solid #e9eeeb;
     border-bottom: 1px solid #e4eae6;
     border-left: 1px solid #e9eeeb;
@@ -713,14 +890,14 @@
 }
 
 .chain-columns-row th {
-    height: 30px;
-    padding: 0 9px;
+    height: 22px;
+    padding: 0 6px;
     border-bottom: 1px solid #e9eeeb;
     background: #fafcfb;
     color: #9ba59f;
     font-size: 7px;
     font-weight: 700;
-    letter-spacing: .3px;
+    letter-spacing: .2px;
 }
 
 .chain-columns-row th:first-child,
@@ -729,11 +906,11 @@
 }
 
 .option-chain-table td {
-    height: 34px;
-    padding: 0 9px;
+    height: 24px;
+    padding: 2px 6px;
     border-bottom: 1px solid #f1f3f2;
-    color: #59665f;
-    font-size: 9px;
+    color: #4a5750;
+    font-size: 8.5px;
 }
 
 .option-chain-table tbody tr:hover td {

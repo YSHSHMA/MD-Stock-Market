@@ -64,73 +64,78 @@
                     <div class="empty-state empty-activity" id="empty-activity" hidden><div class="empty-icon">↕</div><strong>No activity yet</strong><p>Your recorded transactions will appear here.</p></div>
                 </section>
                 <section class="content-card option-chain-card" id="option-chain" hidden>
-                    <div class="option-chain-heading">
-                        <div>
-                                <div class="option-title-row"><h2>Option chain</h2><span class="sample-badge" id="option-chain-badge"><span></span> SIMULATED DATA</span></div>
+                    <div class="option-chain-heading single-line-header">
+                        <div class="header-left-group">
+                            <div class="option-title-row">
+                                <h2>Option chain</h2>
+                                <span class="sample-badge" id="option-chain-badge"><span></span> SIMULATED DATA</span>
+                            </div>
                             <p id="option-chain-description">Explore call and put contracts by strike and expiry. Quotes below are illustrative sample data, not live prices.</p>
                         </div>
-                        <button class="icon-button" id="refresh-option-chain" type="button" title="Refresh sample chain" aria-label="Refresh sample chain">↻</button>
-                    </div>
-                    <div class="option-chain-controls">
-                        <div class="angel-one-tools">
-                            <div class="chain-source-note" id="angel-one-status" role="status">
-                                <span class="source-dot"></span>
-                                <span>Sample feed · Connect Angel One to securely retrieve an API access token</span>
-                            </div>
-                            <details class="angel-one-connection" id="angel-one-connection">
-                                <summary id="angel-one-summary">
+                        <div class="header-right-group">
+                            <button class="icon-button" id="refresh-option-chain" type="button" title="Refresh chain" aria-label="Refresh chain">↻</button>
+                            <div class="angel-one-tools">
+                                <div class="chain-source-note" id="angel-one-status" role="status">
                                     <span class="source-dot"></span>
-                                    <span id="angel-one-summary-text">Connect Angel One</span>
-                                </summary>
-                                <div class="angel-one-panel">
-                                    <div class="angel-one-panel-heading">
-                                        <div>
-                                            <strong>Angel One SmartAPI</strong>
-                                            <p>Credentials are sent securely to the app server. PIN and TOTP are used only for login; credentials and tokens remain encrypted server-side.</p>
-                                        </div>
-                                        <button class="icon-button angel-one-close" type="button" aria-label="Close connection form">×</button>
-                                    </div>
-                                    <form id="angel-one-form" autocomplete="off">
-                                        <div class="angel-one-fields">
-                                            <label>Client Id<input name="clientcode" required maxlength="64" autocomplete="off" placeholder="Angel One client code"></label>
-                                            <label>Client PIN<input name="password" type="password" required maxlength="128" autocomplete="new-password" placeholder="Trading account PIN"></label>
-                                            <label>Authenticator TOTP<input name="totp" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" required autocomplete="one-time-code" placeholder="6-digit code"></label>
-                                            <label>API key<input name="api_key" type="password" required maxlength="255" autocomplete="new-password" placeholder="SmartAPI key"></label>
-                                        </div>
-                                        <p class="angel-one-security-note">Server network headers and a fresh request state are added automatically and are never shown in the browser.</p>
-                                        <div class="angel-one-form-error" id="angel-one-error" role="alert" hidden></div>
-                                        <div class="angel-one-form-actions">
-                                            <button class="button button-primary button-small" id="angel-one-connect" type="submit">Connect</button>
-                                        </div>
-                                    </form>
-                                    <div class="angel-one-connected" id="angel-one-connected" hidden>
-                                        <p class="angel-one-connected-message" id="angel-one-connected-message"></p>
-                                        <button class="button button-secondary button-small" id="angel-one-disconnect" type="button" disabled>Disconnect</button>
-                                    </div>
+                                    <span>Sample feed · Connect Angel One to securely retrieve an API access token</span>
                                 </div>
-                            </details>
+                                <details class="angel-one-connection" id="angel-one-connection">
+                                    <summary id="angel-one-summary">
+                                        <span class="source-dot"></span>
+                                        <span id="angel-one-summary-text">Connect Angel One</span>
+                                    </summary>
+                                    <div class="angel-one-panel">
+                                        <div class="angel-one-panel-heading">
+                                            <div>
+                                                <strong>Angel One SmartAPI</strong>
+                                                <p>Credentials are sent securely to the app server. PIN and TOTP are used only for login; credentials and tokens remain encrypted server-side.</p>
+                                            </div>
+                                            <button class="icon-button angel-one-close" type="button" aria-label="Close connection form">×</button>
+                                        </div>
+                                        <form id="angel-one-form" autocomplete="off">
+                                            <div class="angel-one-fields">
+                                                <label>Client Id<input name="clientcode" required maxlength="64" autocomplete="off" placeholder="Angel One client code"></label>
+                                                <label>Client PIN<input name="password" type="password" required maxlength="128" autocomplete="new-password" placeholder="Trading account PIN"></label>
+                                                <label>Authenticator TOTP<input name="totp" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" required autocomplete="one-time-code" placeholder="6-digit code"></label>
+                                                <label>API key<input name="api_key" type="password" required maxlength="255" autocomplete="new-password" placeholder="SmartAPI key"></label>
+                                            </div>
+                                            <p class="angel-one-security-note">Server network headers and a fresh request state are added automatically and are never shown in the browser.</p>
+                                            <div class="angel-one-form-error" id="angel-one-error" role="alert" hidden></div>
+                                            <div class="angel-one-form-actions">
+                                                <button class="button button-primary button-small" id="angel-one-connect" type="submit">Connect</button>
+                                            </div>
+                                        </form>
+                                        <div class="angel-one-connected" id="angel-one-connected" hidden>
+                                            <p class="angel-one-connected-message" id="angel-one-connected-message"></p>
+                                            <button class="button button-secondary button-small" id="angel-one-disconnect" type="button" disabled>Disconnect</button>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
                         </div>
                     </div>
                     <p class="option-connect-prompt" id="option-connect-prompt">Connect your Angel One account to load live option data.</p>
                     <div class="option-live-content" id="option-live-content" hidden>
-                    <div class="option-chain-controls option-market-controls" id="option-market-controls" hidden>
-                        <label class="option-select-label">UNDERLYING
-                            <select id="option-underlying" aria-label="Option underlying">
-                                <option value="NIFTY" selected>NIFTY 50</option>
-                                <option value="BANKNIFTY">BANK NIFTY</option>
-                                <option value="SENSEX">SENSEX</option>
-                                <option value="CRUDEOIL">CRUDE OIL</option>
-                            </select>
-                        </label>
-                        <label class="option-select-label">EXPIRY
-                            <select id="option-expiry" aria-label="Option expiry date" required></select>
-                        </label>
-                    </div>
-                    <div class="option-summary-grid" id="option-summary-grid" aria-label="Option chain summary">
-                        <div class="option-summary-item"><span>UNDERLYING SPOT</span><strong id="option-spot">—</strong><small id="option-symbol-label">—</small></div>
-                        <div class="option-summary-item"><span>PUT / CALL RATIO</span><strong id="option-pcr">—</strong><small>Based on sample open interest</small></div>
-                        <div class="option-summary-item"><span>CALLS · TOTAL OI</span><strong id="option-call-oi">—</strong><small>Open interest contracts</small></div>
-                        <div class="option-summary-item"><span>PUTS · TOTAL OI</span><strong id="option-put-oi">—</strong><small>Open interest contracts</small></div>
+                    <div class="option-chain-controls option-market-controls single-line-bar" id="option-market-controls" hidden>
+                        <div class="market-inputs-row">
+                            <label class="option-select-label">UNDERLYING
+                                <select id="option-underlying" aria-label="Option underlying">
+                                    <option value="NIFTY" selected>NIFTY 50</option>
+                                    <option value="BANKNIFTY">BANK NIFTY</option>
+                                    <option value="SENSEX">SENSEX</option>
+                                    <option value="CRUDEOIL">CRUDE OIL</option>
+                                </select>
+                            </label>
+                            <label class="option-select-label">EXPIRY
+                                <select id="option-expiry" aria-label="Option expiry date" required></select>
+                            </label>
+                        </div>
+                        <div class="option-summary-grid single-line-metrics" id="option-summary-grid" aria-label="Option chain summary">
+                            <div class="option-summary-item"><span>UNDERLYING SPOT</span><strong id="option-spot">—</strong><small id="option-symbol-label">—</small></div>
+                            <div class="option-summary-item"><span>PUT / CALL RATIO</span><strong id="option-pcr">—</strong><small>Based on open interest</small></div>
+                            <div class="option-summary-item"><span>CALLS · TOTAL OI</span><strong id="option-call-oi">—</strong><small>Open interest contracts</small></div>
+                            <div class="option-summary-item"><span>PUTS · TOTAL OI</span><strong id="option-put-oi">—</strong><small>Open interest contracts</small></div>
+                        </div>
                     </div>
                     <div class="option-chain-table-wrap">
                         <table class="option-chain-table">
@@ -141,8 +146,18 @@
                                     <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
                                 </tr>
                                 <tr class="chain-columns-row">
-                                    <th>GAMMA</th><th>VEGA</th><th>THETA</th><th>DELTA</th><th>OPEN INTEREST</th><th>LTP</th>
-                                    <th>LTP</th><th>OPEN INTEREST</th><th>DELTA</th><th>THETA</th><th>VEGA</th><th>GAMMA</th>
+                                    <th>Call PCR</th>
+                                    <th>Call Vol.</th>
+                                    <th>Call OI Chg</th>
+                                    <th>Call OI Chg %</th>
+                                    <th>Call OI (lakh)</th>
+                                    <th>Call LTP</th>
+                                    <th>Put IV</th>
+                                    <th>Put LTP</th>
+                                    <th>Put OI (lakh)</th>
+                                    <th>Put OI Chg %</th>
+                                    <th>Put OI Chg</th>
+                                    <th>Put Vol.</th>
                                 </tr>
                             </thead>
                             <tbody id="option-chain-body">

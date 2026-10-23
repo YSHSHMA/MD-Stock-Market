@@ -566,18 +566,18 @@
                 <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
             </tr>
             <tr class="chain-columns-row">
-                <th>GAMMA</th>
-                <th>VEGA</th>
-                <th>THETA</th>
-                <th>DELTA</th>
-                <th>OPEN INTEREST</th>
-                <th>LTP</th>
-                <th>LTP</th>
-                <th>OPEN INTEREST</th>
-                <th>DELTA</th>
-                <th>THETA</th>
-                <th>VEGA</th>
-                <th>GAMMA</th>
+                <th>Call PCR</th>
+                <th>Call Vol.</th>
+                <th>Call OI Chg</th>
+                <th>Call OI Chg %</th>
+                <th>Call OI (lakh)</th>
+                <th>Call LTP</th>
+                <th>Put IV</th>
+                <th>Put LTP</th>
+                <th>Put OI (lakh)</th>
+                <th>Put OI Chg %</th>
+                <th>Put OI Chg</th>
+                <th>Put Vol.</th>
             </tr>
         `;
 
@@ -592,12 +592,12 @@
         optionElements.badge.classList.add('live-badge');
 
         optionElements.description.textContent = quoteDerived
-            ? 'Sensibull-style Option Chain & Greeks calculated from Angel One quotes for the selected underlying and expiry.'
-            : 'Sensibull-style Option Chain & Live Greeks from Angel One by strike.';
+            ? 'Sensibull-style Option Chain calculated from Angel One quotes for the selected underlying and expiry.'
+            : 'Sensibull-style Option Chain & Live Quotes from Angel One by strike.';
 
         optionElements.footerNote.textContent = quoteDerived
-            ? 'Greeks are estimates calculated from live quotes using Black-Scholes/Black-76. Stale or illiquid quotes can affect values.'
-            : 'LTP and open interest are from Angel One FULL quotes; Greeks are from Angel One. Market values may be delayed.';
+            ? 'Open interest and volumes in lakhs/contracts from Angel One quotes. Stale or illiquid quotes can affect values.'
+            : 'LTP, OI change, and volume are from Angel One live market quotes.';
     }
 
     function restoreDemoOptionChain() {
@@ -608,18 +608,18 @@
                 <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
             </tr>
             <tr class="chain-columns-row">
-                <th>GAMMA</th>
-                <th>VEGA</th>
-                <th>THETA</th>
-                <th>DELTA</th>
-                <th>OPEN INTEREST</th>
-                <th>LTP</th>
-                <th>LTP</th>
-                <th>OPEN INTEREST</th>
-                <th>DELTA</th>
-                <th>THETA</th>
-                <th>VEGA</th>
-                <th>GAMMA</th>
+                <th>Call PCR</th>
+                <th>Call Vol.</th>
+                <th>Call OI Chg</th>
+                <th>Call OI Chg %</th>
+                <th>Call OI (lakh)</th>
+                <th>Call LTP</th>
+                <th>Put IV</th>
+                <th>Put LTP</th>
+                <th>Put OI (lakh)</th>
+                <th>Put OI Chg %</th>
+                <th>Put OI Chg</th>
+                <th>Put Vol.</th>
             </tr>
         `;
         optionElements.summary.hidden = false;
@@ -668,13 +668,17 @@
             return;
         }
 
-        const number = (value, places = 4) =>
-            value === null || value === undefined || value === ''
-                ? '—'
-                : Number(value).toLocaleString(undefined, {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: places,
-                });
+        const toLakhs = (qty) => {
+            if (qty == null || qty === '' || isNaN(qty)) return '—';
+            const val = Number(qty) / 100000;
+            return val.toFixed(1);
+        };
+
+        const formatPercent = (val) => {
+            if (val == null || val === '' || isNaN(val)) return '—';
+            const num = Number(val);
+            return `${num > 0 ? '+' : ''}${num.toFixed(1)}%`;
+        };
 
         // Group rows by strike into { [strike]: { call: {...}, put: {...} } }
         const strikeMap = new Map();
@@ -732,29 +736,80 @@
             const callDepth = c.open_interest ? Math.round((c.open_interest / maxCallOi) * 100) : 0;
             const putDepth = p.open_interest ? Math.round((p.open_interest / maxPutOi) * 100) : 0;
 
+            // Call PCR (Strike PCR = Put OI / Call OI)
+            const cOi = Number(c.open_interest) || 0;
+            const pOi = Number(p.open_interest) || 0;
+            const strikePcr = cOi > 0 ? (pOi / cOi).toFixed(1) : (pOi > 0 ? '—' : '—');
+
+            // Volumes in thousands (k) or contracts (e.g. Sensibull shows volume in thousands)
+            const formatVol = (v) => {
+                if (v == null || v === '' || isNaN(v)) return '—';
+                const num = Number(v);
+                if (num >= 1000) return (num / 1000).toFixed(num >= 10000 ? 0 : 1);
+                return num.toString();
+            };
+            const cVol = formatVol(c.trade_volume);
+            const pVol = formatVol(p.trade_volume);
+
+            // OI Change in Lakhs and OI Change %
+            // opnInterest is today's current OI.
+            // If historical/prior OI is provided or estimated via opnInterestChg:
+            const cOiChgRaw = c.market_data?.opnInterestChg != null 
+                ? Number(c.market_data.opnInterestChg) 
+                : (c.oi_change != null ? Number(c.oi_change) : null);
+            const pOiChgRaw = p.market_data?.opnInterestChg != null 
+                ? Number(p.market_data.opnInterestChg) 
+                : (p.oi_change != null ? Number(p.oi_change) : null);
+
+            const cOiChgLakh = cOiChgRaw != null ? (cOiChgRaw / 100000).toFixed(1) : '—';
+            const pOiChgLakh = pOiChgRaw != null ? (pOiChgRaw / 100000).toFixed(1) : '—';
+
+            // Percent change in OI: (OI Chg / (Current OI - OI Chg)) * 100
+            const calcOiChgPct = (currOi, chg) => {
+                if (chg == null || !currOi) return null;
+                const prevOi = currOi - chg;
+                if (prevOi <= 0) return 0;
+                return (chg / prevOi) * 100;
+            };
+
+            const cOiPctVal = c.oi_change_pct != null 
+                ? Number(c.oi_change_pct) 
+                : (cOiChgRaw != null ? calcOiChgPct(cOi, cOiChgRaw) : null);
+            const pOiPctVal = p.oi_change_pct != null 
+                ? Number(p.oi_change_pct) 
+                : (pOiChgRaw != null ? calcOiChgPct(pOi, pOiChgRaw) : null);
+
+            const cOiChgPctStr = cOiPctVal != null ? `${cOiPctVal > 0 ? '+' : ''}${cOiPctVal.toFixed(1)}%` : '—';
+            const pOiChgPctStr = pOiPctVal != null ? `${pOiPctVal > 0 ? '+' : ''}${pOiPctVal.toFixed(1)}%` : '—';
+
+            const cLtp = c.ltp != null ? Number(c.ltp).toFixed(2) : (c.market_data?.ltp != null ? Number(c.market_data.ltp).toFixed(2) : '—');
+            const pLtp = p.ltp != null ? Number(p.ltp).toFixed(2) : (p.market_data?.ltp != null ? Number(p.market_data.ltp).toFixed(2) : '—');
+
+            const pIv = p.implied_volatility != null ? Number(p.implied_volatility).toFixed(1) : '—';
+
             const callPnlClass = (c.market_data?.netChange ?? 0) < 0 ? 'negative-cell' : 'positive-cell';
             const putPnlClass = (p.market_data?.netChange ?? 0) < 0 ? 'negative-cell' : 'positive-cell';
 
             return `
                 <tr class="${isAtm ? 'atm-row' : ''}">
-                    <!-- CALLS (LEFT: Gamma, Vega, Theta, Delta, Open Interest, LTP) -->
-                    <td>${number(c.gamma, 4)}</td>
-                    <td>${number(c.vega, 2)}</td>
-                    <td>${number(c.theta, 2)}</td>
-                    <td>${number(c.delta, 4)}</td>
-                    <td class="call-cell" style="--depth:${callDepth}%">${formatContracts(c.open_interest)}</td>
-                    <td class="${callPnlClass}"><strong>${c.ltp != null ? optionMoney(c.ltp) : '—'}</strong></td>
+                    <!-- CALLS: Call PCR, Call Vol., Call OI Chg, Call OI Chg %, Call OI (lakh), Call LTP -->
+                    <td>${strikePcr}</td>
+                    <td>${cVol}</td>
+                    <td class="${(Number(cOiChgLakh) || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgLakh}</td>
+                    <td class="${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPctStr}</td>
+                    <td class="call-cell" style="--depth:${callDepth}%">${toLakhs(c.open_interest)}</td>
+                    <td class="${callPnlClass}"><strong>${cLtp}</strong></td>
 
                     <!-- STRIKE (CENTER) -->
                     <td class="strike-cell">${formatContracts(s.strike)}${isAtm ? ' · ATM' : ''}</td>
 
-                    <!-- PUTS (RIGHT: LTP, Open Interest, Delta, Theta, Vega, Gamma) -->
-                    <td class="${putPnlClass}"><strong>${p.ltp != null ? optionMoney(p.ltp) : '—'}</strong></td>
-                    <td class="put-cell" style="--depth:${putDepth}%">${formatContracts(p.open_interest)}</td>
-                    <td>${number(p.delta, 4)}</td>
-                    <td>${number(p.theta, 2)}</td>
-                    <td>${number(p.vega, 2)}</td>
-                    <td>${number(p.gamma, 4)}</td>
+                    <!-- PUTS: Put IV, Put LTP, Put OI (lakh), Put OI Chg %, Put OI Chg, Put Vol. -->
+                    <td>${pIv}</td>
+                    <td class="${putPnlClass}"><strong>${pLtp}</strong></td>
+                    <td class="put-cell" style="--depth:${putDepth}%">${toLakhs(p.open_interest)}</td>
+                    <td class="${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPctStr}</td>
+                    <td class="${(Number(pOiChgLakh) || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgLakh}</td>
+                    <td>${pVol}</td>
                 </tr>
             `;
         }).join('');
@@ -853,33 +908,36 @@
             optionElements.body.innerHTML = chain.rows.map((row) => {
                 const callDepth = Math.round((row.call.oi / maxCallOi) * 100);
                 const putDepth = Math.round((row.put.oi / maxPutOi) * 100);
-                const cDist = (row.strike - chain.spot) / 100;
-                const cDelta = Number((Math.max(0.05, Math.min(0.95, 0.5 - cDist * 0.08))).toFixed(4));
-                const pDelta = Number((cDelta - 1).toFixed(4));
-                const gamma = Number((Math.max(0.0001, 0.0006 - Math.abs(cDist) * 0.00008)).toFixed(4));
-                const vega = Number((Math.max(1, 8.5 - Math.abs(cDist) * 1.2)).toFixed(2));
-                const theta = Number((-Math.max(2, 14 - Math.abs(cDist) * 1.5)).toFixed(2));
+                const strikePcr = row.call.oi > 0 ? (row.put.oi / row.call.oi).toFixed(1) : '—';
+                const cVol = (row.call.volume / 1000).toFixed(0);
+                const pVol = (row.put.volume / 1000).toFixed(0);
+                const cOiChgLakh = (row.call.oiChange / 100000).toFixed(1);
+                const pOiChgLakh = (row.put.oiChange / 100000).toFixed(1);
+                const cOiChgPct = row.call.oi ? ((row.call.oiChange / row.call.oi) * 100).toFixed(1) : 0;
+                const pOiChgPct = row.put.oi ? ((row.put.oiChange / row.put.oi) * 100).toFixed(1) : 0;
+                const cOiLakh = (row.call.oi / 100000).toFixed(1);
+                const pOiLakh = (row.put.oi / 100000).toFixed(1);
 
                 return `
                     <tr class="${row.isAtm ? 'atm-row' : ''}">
-                        <!-- CALLS (LEFT: Gamma, Vega, Theta, Delta, Open Interest, LTP) -->
-                        <td>${gamma}</td>
-                        <td>${vega}</td>
-                        <td>${theta}</td>
-                        <td>${cDelta}</td>
-                        <td class="call-cell" style="--depth:${callDepth}%">${formatContracts(row.call.oi)}</td>
-                        <td><strong>${optionMoney(row.call.ltp)}</strong></td>
+                        <!-- CALLS: Call PCR, Call Vol., Call OI Chg, Call OI Chg %, Call OI (lakh), Call LTP -->
+                        <td>${strikePcr}</td>
+                        <td>${cVol}</td>
+                        <td>${cOiChgLakh}</td>
+                        <td class="${cOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPct > 0 ? '+' : ''}${cOiChgPct}%</td>
+                        <td class="call-cell" style="--depth:${callDepth}%">${cOiLakh}</td>
+                        <td><strong>${Number(row.call.ltp).toFixed(2)}</strong></td>
 
-                        <!-- STRIKE (CENTER) -->
+                        <!-- STRIKE -->
                         <td class="strike-cell">${formatContracts(row.strike)}${row.isAtm ? ' · ATM' : ''}</td>
 
-                        <!-- PUTS (RIGHT: LTP, Open Interest, Delta, Theta, Vega, Gamma) -->
-                        <td><strong>${optionMoney(row.put.ltp)}</strong></td>
-                        <td class="put-cell" style="--depth:${putDepth}%">${formatContracts(row.put.oi)}</td>
-                        <td>${pDelta}</td>
-                        <td>${theta}</td>
-                        <td>${vega}</td>
-                        <td>${gamma}</td>
+                        <!-- PUTS: Put IV, Put LTP, Put OI (lakh), Put OI Chg %, Put OI Chg, Put Vol. -->
+                        <td>${Number(row.put.iv).toFixed(1)}</td>
+                        <td><strong>${Number(row.put.ltp).toFixed(2)}</strong></td>
+                        <td class="put-cell" style="--depth:${putDepth}%">${pOiLakh}</td>
+                        <td class="${pOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPct > 0 ? '+' : ''}${pOiChgPct}%</td>
+                        <td>${pOiChgLakh}</td>
+                        <td>${pVol}</td>
                     </tr>
                 `;
             }).join('');
