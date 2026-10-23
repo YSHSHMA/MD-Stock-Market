@@ -123,11 +123,20 @@ services:
       DB_USERNAME: stock_market
       DB_PASSWORD: ${LOCAL_DB_PASSWORD:-marketboard-local-only}
       DB_SSLMODE: disable
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-marketboard-local}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-marketboard-local-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-marketboard-local-secret}
+      REVERB_HOST: websocket
+      REVERB_PORT: "8080"
+      REVERB_SCHEME: http
     command: ["php", "artisan", "queue:work", "--queue=email"]
     networks:
       - app-network
     depends_on:
       app:
+        condition: service_started
+      websocket:
         condition: service_started
       db:
         condition: service_healthy

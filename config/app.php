@@ -67,6 +67,9 @@ return [
 
     'timezone' => 'UTC',
 
+    'market_open' => env('MARKET_OPEN', '09:00'),
+    'market_close' => env('MARKET_CLOSE', '18:00'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

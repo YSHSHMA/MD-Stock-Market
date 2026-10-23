@@ -560,21 +560,28 @@
 
     function prepareAngelOneGreeksView(source = 'angel_one') {
         optionElements.tableHead.innerHTML = `
+            <tr class="chain-group-row">
+                <th class="call-group" colspan="6">CALLS <span>CALL OPTIONS</span></th>
+                <th class="strike-group" rowspan="2">STRIKE</th>
+                <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
+            </tr>
             <tr class="chain-columns-row">
-                <th>TYPE</th>
-                <th>STRIKE</th>
-                <th>LTP</th>
-                <th>OPEN INT.</th>
-                <th>VOLUME</th>
-                <th>IV</th>
-                <th>DELTA</th>
                 <th>GAMMA</th>
+                <th>VEGA</th>
+                <th>THETA</th>
+                <th>DELTA</th>
+                <th>OPEN INTEREST</th>
+                <th>LTP</th>
+                <th>LTP</th>
+                <th>OPEN INTEREST</th>
+                <th>DELTA</th>
                 <th>THETA</th>
                 <th>VEGA</th>
+                <th>GAMMA</th>
             </tr>
         `;
 
-        optionElements.summary.hidden = true;
+        optionElements.summary.hidden = false;
 
         const quoteDerived = source === 'calculated_from_live_quotes';
 
@@ -585,8 +592,8 @@
         optionElements.badge.classList.add('live-badge');
 
         optionElements.description.textContent = quoteDerived
-            ? 'Option LTP and open interest from Angel One quotes, with Greeks calculated for the selected underlying and expiry.'
-            : 'Option LTP and open interest from Angel One quotes alongside live Greeks by strike.';
+            ? 'Sensibull-style Option Chain & Greeks calculated from Angel One quotes for the selected underlying and expiry.'
+            : 'Sensibull-style Option Chain & Live Greeks from Angel One by strike.';
 
         optionElements.footerNote.textContent = quoteDerived
             ? 'Greeks are estimates calculated from live quotes using Black-Scholes/Black-76. Stale or illiquid quotes can affect values.'
@@ -594,7 +601,27 @@
     }
 
     function restoreDemoOptionChain() {
-        optionElements.tableHead.innerHTML = demoOptionTableHead;
+        optionElements.tableHead.innerHTML = `
+            <tr class="chain-group-row">
+                <th class="call-group" colspan="6">CALLS <span>CALL OPTIONS</span></th>
+                <th class="strike-group" rowspan="2">STRIKE</th>
+                <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
+            </tr>
+            <tr class="chain-columns-row">
+                <th>GAMMA</th>
+                <th>VEGA</th>
+                <th>THETA</th>
+                <th>DELTA</th>
+                <th>OPEN INTEREST</th>
+                <th>LTP</th>
+                <th>LTP</th>
+                <th>OPEN INTEREST</th>
+                <th>DELTA</th>
+                <th>THETA</th>
+                <th>VEGA</th>
+                <th>GAMMA</th>
+            </tr>
+        `;
         optionElements.summary.hidden = false;
         optionElements.badge.innerHTML = '<span></span> SIMULATED DATA';
         optionElements.badge.classList.remove('live-badge');
@@ -627,12 +654,13 @@
             `Angel One · ${new Intl.DateTimeFormat(undefined, {
                 hour: 'numeric',
                 minute: '2-digit',
+                second: '2-digit',
             }).format(new Date())}`;
 
         if (!rows.length) {
             optionElements.body.innerHTML = `
                 <tr>
-                    <td colspan="10" class="chain-error">
+                    <td colspan="13" class="chain-error">
                         Angel One returned no live option data for this underlying and expiry.
                     </td>
                 </tr>
@@ -640,27 +668,96 @@
             return;
         }
 
-        const number = (value) =>
+        const number = (value, places = 4) =>
             value === null || value === undefined || value === ''
                 ? '—'
                 : Number(value).toLocaleString(undefined, {
-                    maximumFractionDigits: 6,
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: places,
                 });
 
-        optionElements.body.innerHTML = rows.map((row) => `
-            <tr>
-                <td>${escapeHtml(row.option_type)}</td>
-                <td class="strike-cell">${formatContracts(row.strike)}</td>
-                <td>${row.ltp == null ? '—' : optionMoney(row.ltp)}</td>
-                <td>${formatContracts(row.open_interest)}</td>
-                <td>${formatContracts(row.trade_volume)}</td>
-                <td>${number(row.implied_volatility)}%</td>
-                <td>${number(row.delta)}</td>
-                <td>${number(row.gamma)}</td>
-                <td>${number(row.theta)}</td>
-                <td>${number(row.vega)}</td>
-            </tr>
-        `).join('');
+        // Group rows by strike into { [strike]: { call: {...}, put: {...} } }
+        const strikeMap = new Map();
+        let totalCallOi = 0;
+        let totalPutOi = 0;
+        let maxCallOi = 1;
+        let maxPutOi = 1;
+
+        rows.forEach((row) => {
+            const strike = Number(row.strike);
+            if (!strikeMap.has(strike)) {
+                strikeMap.set(strike, { strike, call: null, put: null });
+            }
+            const item = strikeMap.get(strike);
+            const oi = Number(row.open_interest) || 0;
+            if (row.option_type === 'CE') {
+                item.call = row;
+                totalCallOi += oi;
+                if (oi > maxCallOi) maxCallOi = oi;
+            } else if (row.option_type === 'PE') {
+                item.put = row;
+                totalPutOi += oi;
+                if (oi > maxPutOi) maxPutOi = oi;
+            }
+        });
+
+        // Sort strikes ascending
+        const sortedStrikes = Array.from(strikeMap.values()).sort(
+            (a, b) => a.strike - b.strike
+        );
+
+        // Update summary metrics
+        optionElements.callOi.textContent = formatContracts(totalCallOi);
+        optionElements.putOi.textContent = formatContracts(totalPutOi);
+        optionElements.pcr.textContent = totalCallOi ? (totalPutOi / totalCallOi).toFixed(2) : '—';
+
+        // Find ATM strike if underlying spot can be estimated or if delta ~ 0.5
+        let spotPrice = null;
+        for (const s of sortedStrikes) {
+            if (s.call?.market_data?.close || s.call?.market_data?.ltp) {
+                if (s.call.delta != null && Math.abs(s.call.delta - 0.5) < 0.08) {
+                    spotPrice = s.strike;
+                    break;
+                }
+            }
+        }
+        if (spotPrice) {
+            optionElements.spot.textContent = optionMoney(spotPrice);
+        }
+
+        optionElements.body.innerHTML = sortedStrikes.map((s) => {
+            const c = s.call || {};
+            const p = s.put || {};
+            const isAtm = spotPrice ? Math.abs(s.strike - spotPrice) < 50 : (c.delta != null && Math.abs(c.delta - 0.5) < 0.04);
+            const callDepth = c.open_interest ? Math.round((c.open_interest / maxCallOi) * 100) : 0;
+            const putDepth = p.open_interest ? Math.round((p.open_interest / maxPutOi) * 100) : 0;
+
+            const callPnlClass = (c.market_data?.netChange ?? 0) < 0 ? 'negative-cell' : 'positive-cell';
+            const putPnlClass = (p.market_data?.netChange ?? 0) < 0 ? 'negative-cell' : 'positive-cell';
+
+            return `
+                <tr class="${isAtm ? 'atm-row' : ''}">
+                    <!-- CALLS (LEFT: Gamma, Vega, Theta, Delta, Open Interest, LTP) -->
+                    <td>${number(c.gamma, 4)}</td>
+                    <td>${number(c.vega, 2)}</td>
+                    <td>${number(c.theta, 2)}</td>
+                    <td>${number(c.delta, 4)}</td>
+                    <td class="call-cell" style="--depth:${callDepth}%">${formatContracts(c.open_interest)}</td>
+                    <td class="${callPnlClass}"><strong>${c.ltp != null ? optionMoney(c.ltp) : '—'}</strong></td>
+
+                    <!-- STRIKE (CENTER) -->
+                    <td class="strike-cell">${formatContracts(s.strike)}${isAtm ? ' · ATM' : ''}</td>
+
+                    <!-- PUTS (RIGHT: LTP, Open Interest, Delta, Theta, Vega, Gamma) -->
+                    <td class="${putPnlClass}"><strong>${p.ltp != null ? optionMoney(p.ltp) : '—'}</strong></td>
+                    <td class="put-cell" style="--depth:${putDepth}%">${formatContracts(p.open_interest)}</td>
+                    <td>${number(p.delta, 4)}</td>
+                    <td>${number(p.theta, 2)}</td>
+                    <td>${number(p.vega, 2)}</td>
+                    <td>${number(p.gamma, 4)}</td>
+                </tr>
+            `;
+        }).join('');
     }
 
     async function refreshOptionChain() {
@@ -671,7 +768,7 @@
 
         optionElements.body.innerHTML = `
             <tr>
-                <td colspan="${angelOneConnected ? 10 : 11}" class="chain-loading">
+                <td colspan="${angelOneConnected ? 13 : 11}" class="chain-loading">
                     <span class="spinner"></span>
                     Loading ${angelOneConnected ? 'live Angel One option data' : 'simulated option chain'}…
                 </td>
@@ -689,7 +786,7 @@
                 if (!expiry) {
                     optionElements.body.innerHTML = `
                         <tr>
-                            <td colspan="10" class="chain-error">
+                            <td colspan="13" class="chain-error">
                                 Choose an expiry listed by Angel One for this underlying.
                             </td>
                         </tr>
@@ -756,30 +853,33 @@
             optionElements.body.innerHTML = chain.rows.map((row) => {
                 const callDepth = Math.round((row.call.oi / maxCallOi) * 100);
                 const putDepth = Math.round((row.put.oi / maxPutOi) * 100);
+                const cDist = (row.strike - chain.spot) / 100;
+                const cDelta = Number((Math.max(0.05, Math.min(0.95, 0.5 - cDist * 0.08))).toFixed(4));
+                const pDelta = Number((cDelta - 1).toFixed(4));
+                const gamma = Number((Math.max(0.0001, 0.0006 - Math.abs(cDist) * 0.00008)).toFixed(4));
+                const vega = Number((Math.max(1, 8.5 - Math.abs(cDist) * 1.2)).toFixed(2));
+                const theta = Number((-Math.max(2, 14 - Math.abs(cDist) * 1.5)).toFixed(2));
 
                 return `
                     <tr class="${row.isAtm ? 'atm-row' : ''}">
-                        <td class="call-cell" style="--depth:${callDepth}%">
-                            ${formatContracts(row.call.oi)}
-                        </td>
-                        <td class="${row.call.oiChange < 0 ? 'negative-cell' : 'positive-cell'}">
-                            ${row.call.oiChange > 0 ? '+' : ''}${formatContracts(row.call.oiChange)}
-                        </td>
-                        <td>${formatContracts(row.call.volume)}</td>
-                        <td>${Number(row.call.iv).toFixed(1)}%</td>
+                        <!-- CALLS (LEFT: Gamma, Vega, Theta, Delta, Open Interest, LTP) -->
+                        <td>${gamma}</td>
+                        <td>${vega}</td>
+                        <td>${theta}</td>
+                        <td>${cDelta}</td>
+                        <td class="call-cell" style="--depth:${callDepth}%">${formatContracts(row.call.oi)}</td>
                         <td><strong>${optionMoney(row.call.ltp)}</strong></td>
-                        <td class="strike-cell">
-                            ${formatContracts(row.strike)}${row.isAtm ? ' · ATM' : ''}
-                        </td>
+
+                        <!-- STRIKE (CENTER) -->
+                        <td class="strike-cell">${formatContracts(row.strike)}${row.isAtm ? ' · ATM' : ''}</td>
+
+                        <!-- PUTS (RIGHT: LTP, Open Interest, Delta, Theta, Vega, Gamma) -->
                         <td><strong>${optionMoney(row.put.ltp)}</strong></td>
-                        <td>${Number(row.put.iv).toFixed(1)}%</td>
-                        <td>${formatContracts(row.put.volume)}</td>
-                        <td class="${row.put.oiChange < 0 ? 'negative-cell' : 'positive-cell'}">
-                            ${row.put.oiChange > 0 ? '+' : ''}${formatContracts(row.put.oiChange)}
-                        </td>
-                        <td class="put-cell" style="--depth:${putDepth}%">
-                            ${formatContracts(row.put.oi)}
-                        </td>
+                        <td class="put-cell" style="--depth:${putDepth}%">${formatContracts(row.put.oi)}</td>
+                        <td>${pDelta}</td>
+                        <td>${theta}</td>
+                        <td>${vega}</td>
+                        <td>${gamma}</td>
                     </tr>
                 `;
             }).join('');
@@ -788,7 +888,7 @@
 
             optionElements.body.innerHTML = `
                 <tr>
-                    <td colspan="${angelOneConnected ? 10 : 11}" class="chain-error">
+                    <td colspan="13" class="chain-error">
                         ${escapeHtml(error.message)}
                     </td>
                 </tr>

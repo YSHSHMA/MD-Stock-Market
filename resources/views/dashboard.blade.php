@@ -136,17 +136,17 @@
                         <table class="option-chain-table">
                             <thead>
                                 <tr class="chain-group-row">
-                                    <th class="call-group" colspan="5">CALLS <span>CALL OPTIONS</span></th>
+                                    <th class="call-group" colspan="6">CALLS <span>CALL OPTIONS</span></th>
                                     <th class="strike-group" rowspan="2">STRIKE</th>
-                                    <th class="put-group" colspan="5">PUTS <span>PUT OPTIONS</span></th>
+                                    <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
                                 </tr>
                                 <tr class="chain-columns-row">
-                                    <th>OPEN INT.</th><th>OI CHANGE</th><th>VOLUME</th><th>IV</th><th>LTP</th>
-                                    <th>LTP</th><th>IV</th><th>VOLUME</th><th>OI CHANGE</th><th>OPEN INT.</th>
+                                    <th>GAMMA</th><th>VEGA</th><th>THETA</th><th>DELTA</th><th>OPEN INTEREST</th><th>LTP</th>
+                                    <th>LTP</th><th>OPEN INTEREST</th><th>DELTA</th><th>THETA</th><th>VEGA</th><th>GAMMA</th>
                                 </tr>
                             </thead>
                             <tbody id="option-chain-body">
-                                <tr><td colspan="11" class="chain-loading"><span class="spinner"></span> Loading option chain…</td></tr>
+                                <tr><td colspan="13" class="chain-loading"><span class="spinner"></span> Loading option chain…</td></tr>
                             </tbody>
                         </table>
                     </div>

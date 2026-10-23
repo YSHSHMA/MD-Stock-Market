@@ -256,13 +256,6 @@
     font-size: 14px;
 }
 
-.option-chain-focus .option-chain-table-wrap {
-    display: flex;
-    min-height: 0;
-    flex: 1;
-    flex-direction: column;
-    overflow: auto;
-}
 
 .option-chain-focus .option-chain-table {
     height: 100%;
@@ -670,7 +663,7 @@
 
 .option-chain-table {
     width: 100%;
-    min-width: 1180px;
+    min-width: 1100px;
     border-collapse: collapse;
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -760,10 +753,6 @@
     text-align: center;
 }
 
-.option-chain-table tbody tr.atm-row td.strike-cell {
-    background: #dff0e4;
-    color: #23643e;
-}
 
 .option-chain-table td.call-cell {
     background-image: linear-gradient(90deg, #ecf8f0 0 var(--depth), transparent var(--depth));
@@ -999,4 +988,112 @@
     .option-chain-focus .option-chain-footer {
         padding: 5px 9px;
     }
+}
+
+
+/* Scrollable option-chain container */
+.option-chain-table-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    max-height: min(65vh, 720px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #b8c9bd #f3f7f4;
+    scrollbar-gutter: stable;
+    border-top: 1px solid #edf1ee;
+}
+
+/* Visible scrollbar for Chrome, Edge and Safari */
+.option-chain-table-wrap::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+}
+
+.option-chain-table-wrap::-webkit-scrollbar-track {
+    background: #f3f7f4;
+    border-radius: 8px;
+}
+
+.option-chain-table-wrap::-webkit-scrollbar-thumb {
+    background: #b8c9bd;
+    border: 2px solid #f3f7f4;
+    border-radius: 8px;
+}
+
+.option-chain-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: #789b84;
+}
+
+/* Keep the table wide enough to scroll horizontally */
+.option-chain-table {
+    width: 100%;
+    min-width: 1180px;
+    border-collapse: separate;
+    border-spacing: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Keep column headers visible while scrolling vertically */
+.option-chain-table thead th {
+    position: sticky;
+    z-index: 3;
+}
+
+.option-chain-table thead .chain-group-row th {
+    top: 0;
+}
+
+.option-chain-table thead .chain-columns-row th {
+    top: 34px;
+}
+
+/* Keep the strike column centered and visible during horizontal scrolling */
+.option-chain-table .strike-group,
+.option-chain-table td.strike-cell {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    text-align: center;
+    background-color: #f5f7f6;
+}
+
+/* Keep the strike header above the other sticky cells */
+.option-chain-table thead .strike-group {
+    z-index: 5;
+}
+
+/* Sticky strike row cells */
+.option-chain-table tbody td.strike-cell {
+    z-index: 1;
+    background-color: #fafcfb;
+}
+
+/* ATM strike highlight */
+.option-chain-table tbody tr.atm-row td.strike-cell {
+    background-color: #dff0e4;
+}
+
+/* Smaller screens */
+@media (max-width: 760px) {
+    .option-chain-table-wrap {
+        max-height: 60vh;
+        overflow: auto;
+    }
+
+    .option-chain-table {
+        min-width: 1100px;
+    }
+}
+
+/* Focus mode: use the available viewport height */
+.option-chain-focus .option-chain-table-wrap {
+    display: block;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
 }

@@ -11,6 +11,8 @@ final class AngelOneAuthService
 {
     private const LOGIN_URL = 'https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/loginByPassword';
 
+    private const LOGOUT_URL = 'https://apiconnect.angelone.in/rest/secure/angelbroking/user/v1/logout';
+
     /**
      * @param array{
      *     clientcode: string,
@@ -66,5 +68,39 @@ final class AngelOneAuthService
             'refresh_token' => is_string($data['refreshToken'] ?? null) ? $data['refreshToken'] : '',
             'feed_token' => is_string($data['feedToken'] ?? null) ? $data['feedToken'] : '',
         ];
+    }
+
+    /**
+     * Log out from the Angel One SmartAPI session.
+     *
+     * @param array{api_key: string, jwt_token: string} $credentials
+     * @param string $clientCode
+     *
+     * @throws \Illuminate\Http\Client\ConnectionException
+     */
+    public function logout(array $credentials, string $clientCode): void
+    {
+        $identity = [
+            'client_local_ip' => config('services.angel_one.client_local_ip'),
+            'client_public_ip' => config('services.angel_one.client_public_ip'),
+            'mac_address' => config('services.angel_one.mac_address'),
+        ];
+
+        Http::asJson()
+            ->acceptJson()
+            ->withHeaders([
+                'Authorization' => 'Bearer '.$credentials['jwt_token'],
+                'X-UserType' => 'USER',
+                'X-SourceID' => 'WEB',
+                'X-ClientLocalIP' => $identity['client_local_ip'] ?? '',
+                'X-ClientPublicIP' => $identity['client_public_ip'] ?? '',
+                'X-MACAddress' => $identity['mac_address'] ?? '',
+                'X-PrivateKey' => $credentials['api_key'],
+            ])
+            ->connectTimeout(5)
+            ->timeout(10)
+            ->post(self::LOGOUT_URL, [
+                'clientcode' => $clientCode,
+            ]);
     }
 }

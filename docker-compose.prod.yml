@@ -51,6 +51,11 @@ services:
     working_dir: /var/www
     env_file:
       - .env.production
+    environment:
+      BROADCAST_CONNECTION: reverb
+      REVERB_HOST: websocket
+      REVERB_PORT: "8080"
+      REVERB_SCHEME: http
     command: ["php", "artisan", "schedule:work"]
     networks:
       - app-network
@@ -68,11 +73,17 @@ services:
     working_dir: /var/www
     env_file:
       - .env.production
+    environment:
+      BROADCAST_CONNECTION: reverb
+      REVERB_HOST: websocket
+      REVERB_PORT: "8080"
+      REVERB_SCHEME: http
     command: ["php", "artisan", "queue:work", "--queue=email,default"]
     networks:
       - app-network
     depends_on:
       - app
+      - websocket
 
 networks:
   app-network:
