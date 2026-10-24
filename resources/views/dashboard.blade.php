@@ -139,6 +139,21 @@
                     </div>
                     <div class="option-chain-table-wrap">
                         <table class="option-chain-table">
+                            <colgroup>
+                                <col class="col-call-pcr">
+                                <col class="col-call-vol">
+                                <col class="col-call-oichg">
+                                <col class="col-call-oichgpct">
+                                <col class="col-call-oi">
+                                <col class="col-call-ltp">
+                                <col class="col-strike">
+                                <col class="col-put-iv">
+                                <col class="col-put-ltp">
+                                <col class="col-put-oi">
+                                <col class="col-put-oichgpct">
+                                <col class="col-put-oichg">
+                                <col class="col-put-vol">
+                            </colgroup>
                             <thead>
                                 <tr class="chain-group-row">
                                     <th class="call-group" colspan="6">CALLS <span>CALL OPTIONS</span></th>

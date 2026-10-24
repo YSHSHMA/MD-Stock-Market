@@ -566,18 +566,18 @@
                 <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
             </tr>
             <tr class="chain-columns-row">
-                <th>Call PCR</th>
-                <th>Call Vol.</th>
-                <th>Call OI Chg</th>
-                <th>Call OI Chg %</th>
-                <th>Call OI (lakh)</th>
-                <th>Call LTP</th>
-                <th>Put IV</th>
-                <th>Put LTP</th>
-                <th>Put OI (lakh)</th>
-                <th>Put OI Chg %</th>
-                <th>Put OI Chg</th>
-                <th>Put Vol.</th>
+                <th class="col-call-pcr">Call PCR</th>
+                <th class="col-call-vol">Call Vol.</th>
+                <th class="col-call-oichg">Call OI Chg</th>
+                <th class="col-call-oichgpct">Call OI Chg %</th>
+                <th class="col-call-oi">Call OI (lakh)</th>
+                <th class="col-call-ltp">Call LTP</th>
+                <th class="col-put-iv">Put IV</th>
+                <th class="col-put-ltp">Put LTP</th>
+                <th class="col-put-oi">Put OI (lakh)</th>
+                <th class="col-put-oichgpct">Put OI Chg %</th>
+                <th class="col-put-oichg">Put OI Chg</th>
+                <th class="col-put-vol">Put Vol.</th>
             </tr>
         `;
 
@@ -608,18 +608,18 @@
                 <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
             </tr>
             <tr class="chain-columns-row">
-                <th>Call PCR</th>
-                <th>Call Vol.</th>
-                <th>Call OI Chg</th>
-                <th>Call OI Chg %</th>
-                <th>Call OI (lakh)</th>
-                <th>Call LTP</th>
-                <th>Put IV</th>
-                <th>Put LTP</th>
-                <th>Put OI (lakh)</th>
-                <th>Put OI Chg %</th>
-                <th>Put OI Chg</th>
-                <th>Put Vol.</th>
+                <th class="col-call-pcr">Call PCR</th>
+                <th class="col-call-vol">Call Vol.</th>
+                <th class="col-call-oichg">Call OI Chg</th>
+                <th class="col-call-oichgpct">Call OI Chg %</th>
+                <th class="col-call-oi">Call OI (lakh)</th>
+                <th class="col-call-ltp">Call LTP</th>
+                <th class="col-put-iv">Put IV</th>
+                <th class="col-put-ltp">Put LTP</th>
+                <th class="col-put-oi">Put OI (lakh)</th>
+                <th class="col-put-oichgpct">Put OI Chg %</th>
+                <th class="col-put-oichg">Put OI Chg</th>
+                <th class="col-put-vol">Put Vol.</th>
             </tr>
         `;
         optionElements.summary.hidden = false;
@@ -733,6 +733,8 @@
             const c = s.call || {};
             const p = s.put || {};
             const isAtm = spotPrice ? Math.abs(s.strike - spotPrice) < 50 : (c.delta != null && Math.abs(c.delta - 0.5) < 0.04);
+            const isCallItm = spotPrice ? s.strike < spotPrice : (c.delta != null && c.delta > 0.5);
+            const isPutItm = spotPrice ? s.strike > spotPrice : (p.delta != null && Math.abs(p.delta) > 0.5);
             const callDepth = c.open_interest ? Math.round((c.open_interest / maxCallOi) * 100) : 0;
             const putDepth = p.open_interest ? Math.round((p.open_interest / maxPutOi) * 100) : 0;
 
@@ -793,23 +795,23 @@
             return `
                 <tr class="${isAtm ? 'atm-row' : ''}">
                     <!-- CALLS: Call PCR, Call Vol., Call OI Chg, Call OI Chg %, Call OI (lakh), Call LTP -->
-                    <td>${strikePcr}</td>
-                    <td>${cVol}</td>
-                    <td class="${(Number(cOiChgLakh) || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgLakh}</td>
-                    <td class="${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPctStr}</td>
-                    <td class="call-cell" style="--depth:${callDepth}%">${toLakhs(c.open_interest)}</td>
-                    <td class="${callPnlClass}"><strong>${cLtp}</strong></td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${strikePcr}</td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cVol}</td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(Number(cOiChgLakh) || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgLakh}</td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPctStr}</td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%">${toLakhs(c.open_interest)}</td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${callPnlClass}"><strong>${cLtp}</strong></td>
 
                     <!-- STRIKE (CENTER) -->
-                    <td class="strike-cell">${formatContracts(s.strike)}${isAtm ? ' · ATM' : ''}</td>
+                    <td class="strike-cell ${isAtm ? 'atm-strike-active' : ''}">${formatContracts(s.strike)}${isAtm ? ' · ATM' : ''}</td>
 
                     <!-- PUTS: Put IV, Put LTP, Put OI (lakh), Put OI Chg %, Put OI Chg, Put Vol. -->
-                    <td>${pIv}</td>
-                    <td class="${putPnlClass}"><strong>${pLtp}</strong></td>
-                    <td class="put-cell" style="--depth:${putDepth}%">${toLakhs(p.open_interest)}</td>
-                    <td class="${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPctStr}</td>
-                    <td class="${(Number(pOiChgLakh) || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgLakh}</td>
-                    <td>${pVol}</td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pIv}</td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${putPnlClass}"><strong>${pLtp}</strong></td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%">${toLakhs(p.open_interest)}</td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPctStr}</td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(Number(pOiChgLakh) || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgLakh}</td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pVol}</td>
                 </tr>
             `;
         }).join('');
@@ -918,26 +920,29 @@
                 const cOiLakh = (row.call.oi / 100000).toFixed(1);
                 const pOiLakh = (row.put.oi / 100000).toFixed(1);
 
+                const isCallItm = chain.spot ? row.strike < chain.spot : false;
+                const isPutItm = chain.spot ? row.strike > chain.spot : false;
+
                 return `
                     <tr class="${row.isAtm ? 'atm-row' : ''}">
                         <!-- CALLS: Call PCR, Call Vol., Call OI Chg, Call OI Chg %, Call OI (lakh), Call LTP -->
-                        <td>${strikePcr}</td>
-                        <td>${cVol}</td>
-                        <td>${cOiChgLakh}</td>
-                        <td class="${cOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPct > 0 ? '+' : ''}${cOiChgPct}%</td>
-                        <td class="call-cell" style="--depth:${callDepth}%">${cOiLakh}</td>
-                        <td><strong>${Number(row.call.ltp).toFixed(2)}</strong></td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${strikePcr}</td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cVol}</td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cOiChgLakh}</td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${cOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPct > 0 ? '+' : ''}${cOiChgPct}%</td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%">${cOiLakh}</td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}"><strong>${Number(row.call.ltp).toFixed(2)}</strong></td>
 
                         <!-- STRIKE -->
-                        <td class="strike-cell">${formatContracts(row.strike)}${row.isAtm ? ' · ATM' : ''}</td>
+                        <td class="strike-cell ${row.isAtm ? 'atm-strike-active' : ''}">${formatContracts(row.strike)}${row.isAtm ? ' · ATM' : ''}</td>
 
                         <!-- PUTS: Put IV, Put LTP, Put OI (lakh), Put OI Chg %, Put OI Chg, Put Vol. -->
-                        <td>${Number(row.put.iv).toFixed(1)}</td>
-                        <td><strong>${Number(row.put.ltp).toFixed(2)}</strong></td>
-                        <td class="put-cell" style="--depth:${putDepth}%">${pOiLakh}</td>
-                        <td class="${pOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPct > 0 ? '+' : ''}${pOiChgPct}%</td>
-                        <td>${pOiChgLakh}</td>
-                        <td>${pVol}</td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${Number(row.put.iv).toFixed(1)}</td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}"><strong>${Number(row.put.ltp).toFixed(2)}</strong></td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%">${pOiLakh}</td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${pOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPct > 0 ? '+' : ''}${pOiChgPct}%</td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pOiChgLakh}</td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pVol}</td>
                     </tr>
                 `;
             }).join('');

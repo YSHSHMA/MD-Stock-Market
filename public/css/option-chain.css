@@ -1,3 +1,43 @@
+/* ==========================================================================
+   SENSIBULL DESIGN TOKENS & ARCHITECTURE
+   ========================================================================== */
+:root {
+    /* Sensibull Neutral & Table Tokens */
+    --sb-border: #e6ebed;
+    --sb-border-subtle: #f0f4f5;
+    --sb-text-main: #2b353b;
+    --sb-text-muted: #7d8b92;
+    --sb-bg-header: #f8fafb;
+    --sb-bg-row-white: #ffffff;
+    --sb-bg-row-hover: #f1f5f7;
+
+    /* Sensibull Yellow ITM / Highlighting Zones */
+    --sb-yellow-bg: #fffbe6;
+    --sb-yellow-border: #f7e8a4;
+    --sb-yellow-hover: #fff6cc;
+
+    /* Sensibull ATM Highlight (Blue) */
+    --sb-atm-bg: #e6f0fa;
+    --sb-atm-strike-bg: #1e88e5;
+    --sb-atm-strike-text: #ffffff;
+    --sb-atm-border: #90caf9;
+
+    /* Sensibull Calls (Soft Red/Pink) & Puts (Soft Green) */
+    --sb-call-header-bg: #fdf0f0;
+    --sb-call-header-text: #c0392b;
+    --sb-call-bar: rgba(239, 83, 80, 0.16);
+    --sb-call-bar-hover: rgba(239, 83, 80, 0.24);
+
+    --sb-put-header-bg: #f0fdf4;
+    --sb-put-header-text: #27ae60;
+    --sb-put-bar: rgba(76, 175, 80, 0.16);
+    --sb-put-bar-hover: rgba(76, 175, 80, 0.24);
+
+    /* Text PnL / Change */
+    --sb-green-text: #1b8a4f;
+    --sb-red-text: #d32f2f;
+}
+
 .option-chain-card[hidden] {
     display: none;
 }
@@ -831,22 +871,43 @@
     font-size: 8px;
 }
 
+/* ==========================================================================
+   OPTION CHAIN TABLE & SENSIBULL COLOR ARCHITECTURE
+   ========================================================================== */
+
+/* 1. Table Container Layer */
 .option-chain-table-wrap {
-    max-height: calc(100vh - 180px);
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    max-height: calc(100vh - 120px);
     overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #b0bec5 #f0f4f5;
     scrollbar-gutter: stable;
-    border-top: 1px solid #edf1ee;
+    border-top: 1px solid var(--sb-border);
+    background: #ffffff;
 }
 
 .option-chain-table {
     width: 100%;
-    min-width: 1050px;
-    border-collapse: collapse;
+    min-width: 1180px;
+    border-collapse: separate;
+    border-spacing: 0;
     text-align: right;
     font-variant-numeric: tabular-nums;
+    font-size: 8.5px;
 }
 
-.option-chain-table th {
+/* 2. Header Layer */
+.option-chain-table thead th {
+    position: sticky;
+    z-index: 3;
     white-space: nowrap;
 }
 
@@ -866,96 +927,147 @@
 }
 
 .chain-group-row .call-group {
-    border-bottom: 1px solid #d9ede1;
-    background: #eff8f2;
-    color: #347a53;
+    top: 0;
+    border-bottom: 1px solid #f5c6cb;
+    background: var(--sb-call-header-bg);
+    color: var(--sb-call-header-text);
     text-align: center;
 }
 
 .chain-group-row .put-group {
-    border-bottom: 1px solid #f1dedd;
-    background: #fff3f1;
-    color: #ad5c55;
+    top: 0;
+    border-bottom: 1px solid #c3e6cb;
+    background: var(--sb-put-header-bg);
+    color: var(--sb-put-header-text);
     text-align: center;
 }
 
 .chain-group-row .strike-group {
-    width: 80px;
-    border-right: 1px solid #e9eeeb;
-    border-bottom: 1px solid #e4eae6;
-    border-left: 1px solid #e9eeeb;
-    background: #f5f7f6;
-    color: #53615a;
+    top: 0;
+    width: 82px;
+    border-right: 1px solid var(--sb-border);
+    border-bottom: 1px solid var(--sb-border);
+    border-left: 1px solid var(--sb-border);
+    background: #f1f5f8;
+    color: var(--sb-text-main);
     text-align: center;
+    position: sticky;
+    left: 0;
+    z-index: 5;
 }
 
 .chain-columns-row th {
+    top: 22px;
     height: 22px;
     padding: 0 6px;
-    border-bottom: 1px solid #e9eeeb;
-    background: #fafcfb;
-    color: #9ba59f;
-    font-size: 7px;
+    border-bottom: 1px solid var(--sb-border);
+    background: var(--sb-bg-header);
+    color: var(--sb-text-muted);
+    font-size: 7.5px;
     font-weight: 700;
     letter-spacing: .2px;
 }
 
-.chain-columns-row th:first-child,
-.chain-columns-row th:nth-child(4) {
-    border-left: 0;
-}
-
+/* 3. Row & Cell Base Layer */
 .option-chain-table td {
-    height: 24px;
+    height: 25px;
     padding: 2px 6px;
-    border-bottom: 1px solid #f1f3f2;
-    color: #4a5750;
+    border-bottom: 1px solid var(--sb-border-subtle);
+    color: var(--sb-text-main);
     font-size: 8.5px;
+    background-color: var(--sb-bg-row-white);
+    transition: background-color 0.1s ease;
 }
 
+/* Row hover */
 .option-chain-table tbody tr:hover td {
-    background-color: #fafcfb;
+    background-color: var(--sb-bg-row-hover);
 }
 
-.option-chain-table tbody tr.atm-row td {
-    background-color: #f1f7f2;
+/* 4. Column / Zone Layer (Sensibull Light-Yellow ITM Shading) */
+.option-chain-table td.zone-itm {
+    background-color: var(--sb-yellow-bg);
 }
 
+.option-chain-table tbody tr:hover td.zone-itm {
+    background-color: var(--sb-yellow-hover);
+}
+
+.option-chain-table td.zone-otm {
+    background-color: var(--sb-bg-row-white);
+}
+
+/* 5. Center Strike Column (Sticky & Prominent) */
 .option-chain-table td.strike-cell {
-    border-right: 1px solid #e9eeeb;
-    border-left: 1px solid #e9eeeb;
-    background: #fafcfb;
-    color: #34443a;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    border-right: 1px solid var(--sb-border);
+    border-left: 1px solid var(--sb-border);
+    background-color: #f8fafb;
+    color: var(--sb-text-main);
     font-weight: 800;
     text-align: center;
+    box-shadow: 1px 0 0 var(--sb-border), -1px 0 0 var(--sb-border);
 }
 
+.option-chain-table tbody tr:hover td.strike-cell {
+    background-color: #eef2f5;
+}
 
+/* 6. State Layer: ATM (At-The-Money) Highlighting */
+.option-chain-table tbody tr.atm-row td {
+    background-color: var(--sb-atm-bg);
+    border-top: 1px solid var(--sb-atm-border);
+    border-bottom: 1px solid var(--sb-atm-border);
+}
+
+/* Blue highlighted strike cell for ATM */
+.option-chain-table tbody tr td.strike-cell.atm-strike-active,
+.option-chain-table tbody tr.atm-row td.strike-cell {
+    background-color: var(--sb-atm-strike-bg) !important;
+    color: var(--sb-atm-strike-text) !important;
+    font-weight: 800;
+    box-shadow: 0 0 6px rgba(30, 136, 229, 0.4);
+    letter-spacing: 0.3px;
+}
+
+/* 7. Indicator Layer (Call Pink/Red Bars & Put Green Bars) */
 .option-chain-table td.call-cell {
-    background-image: linear-gradient(90deg, #ecf8f0 0 var(--depth), transparent var(--depth));
+    background-image: linear-gradient(90deg, var(--sb-call-bar) 0 var(--depth), transparent var(--depth));
+}
+
+.option-chain-table tbody tr:hover td.call-cell {
+    background-image: linear-gradient(90deg, var(--sb-call-bar-hover) 0 var(--depth), transparent var(--depth));
 }
 
 .option-chain-table td.put-cell {
-    background-image: linear-gradient(90deg, #fff0ee 0 var(--depth), transparent var(--depth));
+    background-image: linear-gradient(90deg, var(--sb-put-bar) 0 var(--depth), transparent var(--depth));
 }
 
+.option-chain-table tbody tr:hover td.put-cell {
+    background-image: linear-gradient(90deg, var(--sb-put-bar-hover) 0 var(--depth), transparent var(--depth));
+}
+
+/* Positive / Negative Color Cues */
 .option-chain-table td.positive-cell {
-    color: #1f8754;
+    color: var(--sb-green-text);
 }
 
 .option-chain-table td.negative-cell {
-    color: #c45a51;
+    color: var(--sb-red-text);
 }
 
 .option-chain-table td.chain-loading,
 .option-chain-table td.chain-error {
-    height: 110px;
-    color: #8e9993;
+    height: 140px;
+    color: var(--sb-text-muted);
     text-align: center;
+    background: #ffffff;
 }
 
 .option-chain-table td.chain-error {
-    color: #b44b45;
+    color: var(--sb-red-text);
 }
 
 .option-chain-footer {
@@ -1168,96 +1280,31 @@
 }
 
 
-/* Scrollable option-chain container */
-.option-chain-table-wrap {
-    position: relative;
-    width: 100%;
-    max-width: 100%;
-    max-height: min(65vh, 720px);
-    overflow: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    scrollbar-color: #b8c9bd #f3f7f4;
-    scrollbar-gutter: stable;
-    border-top: 1px solid #edf1ee;
-}
-
-/* Visible scrollbar for Chrome, Edge and Safari */
+/* Scrollable option-chain container scrollbar & focus settings */
 .option-chain-table-wrap::-webkit-scrollbar {
     width: 9px;
     height: 9px;
 }
 
 .option-chain-table-wrap::-webkit-scrollbar-track {
-    background: #f3f7f4;
+    background: #f0f4f5;
     border-radius: 8px;
 }
 
 .option-chain-table-wrap::-webkit-scrollbar-thumb {
-    background: #b8c9bd;
-    border: 2px solid #f3f7f4;
+    background: #b0bec5;
+    border: 2px solid #f0f4f5;
     border-radius: 8px;
 }
 
 .option-chain-table-wrap::-webkit-scrollbar-thumb:hover {
-    background: #789b84;
-}
-
-/* Keep the table wide enough to scroll horizontally */
-.option-chain-table {
-    width: 100%;
-    min-width: 1180px;
-    border-collapse: separate;
-    border-spacing: 0;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-
-/* Keep column headers visible while scrolling vertically */
-.option-chain-table thead th {
-    position: sticky;
-    z-index: 3;
-}
-
-.option-chain-table thead .chain-group-row th {
-    top: 0;
-}
-
-.option-chain-table thead .chain-columns-row th {
-    top: 34px;
-}
-
-/* Keep the strike column centered and visible during horizontal scrolling */
-.option-chain-table .strike-group,
-.option-chain-table td.strike-cell {
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    text-align: center;
-    background-color: #f5f7f6;
-}
-
-/* Keep the strike header above the other sticky cells */
-.option-chain-table thead .strike-group {
-    z-index: 5;
-}
-
-/* Sticky strike row cells */
-.option-chain-table tbody td.strike-cell {
-    z-index: 1;
-    background-color: #fafcfb;
-}
-
-/* ATM strike highlight */
-.option-chain-table tbody tr.atm-row td.strike-cell {
-    background-color: #dff0e4;
+    background: #78909c;
 }
 
 /* Smaller screens */
 @media (max-width: 760px) {
     .option-chain-table-wrap {
-        max-height: 60vh;
+        max-height: calc(100vh - 140px);
         overflow: auto;
     }
 
@@ -1266,11 +1313,41 @@
     }
 }
 
-/* Focus mode: use the available viewport height */
+/* Focus mode: expand fully to the bottom of the viewport */
+.option-chain-focus .page-content {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+.option-chain-focus .option-chain-card {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    overflow: hidden;
+}
+
+.option-chain-focus .option-live-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
 .option-chain-focus .option-chain-table-wrap {
     display: block;
+    width: 100%;
     min-width: 0;
     min-height: 0;
     flex: 1 1 auto;
+    max-height: none !important;
+    height: 100%;
     overflow: auto;
 }
