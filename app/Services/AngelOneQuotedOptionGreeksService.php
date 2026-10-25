@@ -7,12 +7,18 @@ namespace App\Services;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 final class AngelOneQuotedOptionGreeksService
 {
     private const QUOTE_URL = 'https://apiconnect.angelone.in/rest/secure/angelbroking/market/v1/quote/';
+
+    private const HISTORICAL_OI_URL = 'https://apiconnect.angelone.in/rest/secure/angelbroking/historical/v1/getOIData';
 
     private const RISK_FREE_RATE = 0.065;
 
@@ -28,7 +34,7 @@ final class AngelOneQuotedOptionGreeksService
      *     gamma: float,
      *     theta: float,
      *     vega: float,
-     *     implied_volatility: float,
+     *     implied_volatility: float|null,
      *     ltp: float,
      *     open_interest: ?int,
      *     trade_volume: int
@@ -89,10 +95,6 @@ final class AngelOneQuotedOptionGreeksService
             $expiry.($underlying === 'CRUDEOIL' ? ' 23:30:00' : ' 15:30:00'),
             new DateTimeZone('Asia/Kolkata')
         );
-        $yearsToExpiry = max(
-            0,
-            ($expiryDate->getTimestamp() - now()->timestamp) / (365 * 24 * 60 * 60)
-        );
         $model = $underlying === 'CRUDEOIL' ? 'black76' : 'black-scholes';
         $rows = [];
 
@@ -103,6 +105,12 @@ final class AngelOneQuotedOptionGreeksService
                 continue;
             }
 
+            $valuationTime = $this->quoteTradeTime($quote) ?? now()->toImmutable();
+            $yearsToExpiry = max(
+                0,
+                ($expiryDate->getTimestamp() - $valuationTime->getTimestamp()) / (365 * 24 * 60 * 60)
+            );
+
             $impliedVolatility = $this->impliedVolatility(
                 $price,
                 $underlyingPrice,
@@ -111,18 +119,16 @@ final class AngelOneQuotedOptionGreeksService
                 $option['option_type'],
                 $model
             );
-            if ($impliedVolatility === null) {
-                continue;
-            }
-
-            $greeks = $this->calculateGreeks(
-                $underlyingPrice,
-                $option['strike'],
-                $yearsToExpiry,
-                $impliedVolatility,
-                $option['option_type'],
-                $model
-            );
+            $greeks = $impliedVolatility === null
+                ? ['delta' => null, 'gamma' => null, 'theta' => null, 'vega' => null]
+                : $this->calculateGreeks(
+                    $underlyingPrice,
+                    $option['strike'],
+                    $yearsToExpiry,
+                    $impliedVolatility,
+                    $option['option_type'],
+                    $model
+                );
 
             $rows[] = [
                 'strike' => $option['strike'],
@@ -131,7 +137,7 @@ final class AngelOneQuotedOptionGreeksService
                 'gamma' => $greeks['gamma'],
                 'theta' => $greeks['theta'],
                 'vega' => $greeks['vega'],
-                'implied_volatility' => $impliedVolatility * 100,
+                'implied_volatility' => $impliedVolatility === null ? null : $impliedVolatility * 100,
                 'ltp' => $price,
                 'open_interest' => $this->openInterest($quote),
                 'trade_volume' => max(0, (int) ($quote['tradeVolume'] ?? 0)),
@@ -141,6 +147,8 @@ final class AngelOneQuotedOptionGreeksService
 
         usort($rows, static fn (array $left, array $right): int => [$left['strike'], $left['option_type']] <=> [$right['strike'], $right['option_type']]
         );
+
+        $rows = $this->addHistoricalOiChanges($rows, $options, $underlying, $jwtToken, $apiKey, $identity);
 
         if ($rows === []) {
             throw new RuntimeException(
@@ -232,6 +240,9 @@ final class AngelOneQuotedOptionGreeksService
             $quotesByContract[number_format($option['strike'], 8, '.', '').':'.$option['option_type']] = [
                 'ltp' => $ltp,
                 'open_interest' => $this->openInterest($quote),
+                'oi_change' => $this->openInterestChange($quote),
+                'quote_trade_time' => $quote['exchTradeTime'] ?? $quote['exchFeedTime'] ?? null,
+                'market_data' => ['netChange' => $quote['netChange'] ?? null],
                 'trade_volume' => is_numeric($quote['tradeVolume'] ?? null)
                     ? max(0, (int) $quote['tradeVolume'])
                     : null,
@@ -250,6 +261,9 @@ final class AngelOneQuotedOptionGreeksService
                 ...$row,
                 'ltp' => $quote['ltp'],
                 'open_interest' => $quote['open_interest'],
+                'oi_change' => $quote['oi_change'],
+                'quote_trade_time' => $quote['quote_trade_time'],
+                'market_data' => $quote['market_data'],
                 'trade_volume' => $quote['trade_volume'] ?? $row['trade_volume'],
             ];
         }
@@ -258,7 +272,190 @@ final class AngelOneQuotedOptionGreeksService
             throw new RuntimeException("Angel One returned no live option quotes for {$underlying}.");
         }
 
+        $enrichedRows = $this->addHistoricalOiChanges($enrichedRows, $options, $underlying, $jwtToken, $apiKey, $identity);
+
         return $enrichedRows;
+    }
+
+    /**
+     * Enrich current quotes with the change from the previous trading session's closing OI.
+     * Angel One's FULL quote omits this field, so use its historical OI endpoint and cache
+     * each contract baseline for the quote's trading date.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @param list<array{token: string, symbol: string, strike: float, option_type: 'CE'|'PE'}> $options
+     * @param array<string, string> $identity
+     * @return list<array<string, mixed>>
+     */
+    private function addHistoricalOiChanges(
+        array $rows,
+        array $options,
+        string $underlying,
+        string $jwtToken,
+        string $apiKey,
+        array $identity
+    ): array {
+        $contractsByKey = [];
+        foreach ($options as $option) {
+            $contractsByKey[number_format((float) $option['strike'], 8, '.', '').':'.$option['option_type']] = $option;
+        }
+
+        $lookup = [];
+        foreach ($rows as $row) {
+            $key = number_format((float) $row['strike'], 8, '.', '').':'.$row['option_type'];
+            if (isset($contractsByKey[$key])) {
+                $quote = [
+                    'exchTradeTime' => $row['quote_trade_time'] ?? $row['market_data']['exchTradeTime'] ?? null,
+                    'exchFeedTime' => $row['market_data']['exchFeedTime'] ?? null,
+                ];
+                $tradingDate = $this->quoteTradeTime($quote)?->format('Y-m-d')
+                    ?? now(new DateTimeZone('Asia/Kolkata'))->toDateString();
+                $lookup[$key] = [
+                    'contract' => $contractsByKey[$key],
+                    'trading_date' => $tradingDate,
+                ];
+            }
+        }
+
+        $missing = [];
+        foreach ($lookup as $key => $item) {
+            $option = $item['contract'];
+            $tradingDate = $item['trading_date'];
+            $cacheKey = "angel_one.oi_baseline.v4.{$underlying}.{$tradingDate}.{$option['token']}";
+            if (! Cache::has($cacheKey)) {
+                $missing[$cacheKey] = [...$option, 'trading_date' => $tradingDate];
+            }
+        }
+
+        $batchNumber = 0;
+        foreach (array_chunk($missing, 3, true) as $chunk) {
+            if ($batchNumber++ > 0) {
+                usleep(1_000_000);
+            }
+            try {
+                $responses = Http::pool(function (Pool $pool) use ($chunk, $jwtToken, $apiKey, $identity, $underlying) {
+                    $requests = [];
+                    foreach ($chunk as $cacheKey => $option) {
+                        $contractTradingDate = $option['trading_date'];
+                        $from = (new DateTimeImmutable($contractTradingDate.' -7 days', new DateTimeZone('Asia/Kolkata')))->format('Y-m-d 09:00');
+                        $to = $contractTradingDate.' 23:59';
+                        // Keep the response keyed by cache key; relying on numeric list keys
+                        // can make pooled results impossible to match back to their contract.
+                        $requests[$cacheKey] = $pool->as($cacheKey)
+                            ->withToken($jwtToken)
+                            ->withHeaders([
+                                'X-UserType' => 'USER',
+                                'X-SourceID' => 'WEB',
+                                'X-ClientLocalIP' => $identity['client_local_ip'],
+                                'X-ClientPublicIP' => $identity['client_public_ip'],
+                                'X-MACAddress' => $identity['mac_address'],
+                                'X-PrivateKey' => $apiKey,
+                            ])
+                            ->connectTimeout(5)
+                            ->timeout(12)
+                            ->post(self::HISTORICAL_OI_URL, [
+                                'exchange' => match ($underlying) {
+                                    'SENSEX' => 'BFO',
+                                    'CRUDEOIL' => 'MCX',
+                                    default => 'NFO',
+                                },
+                                'symboltoken' => $option['token'],
+                                'interval' => 'THREE_MINUTE',
+                                'fromdate' => $from,
+                                'todate' => $to,
+                            ]);
+                    }
+
+                    return $requests;
+                });
+            } catch (ConnectionException) {
+                $responses = [];
+            }
+
+            foreach ($chunk as $cacheKey => $_option) {
+                $baseline = null;
+                $response = $responses[$cacheKey] ?? null;
+                if (! $response instanceof Response) {
+                    Cache::put($cacheKey, -1, now()->addMinute());
+                    continue;
+                }
+                $payload = $response?->json();
+                if (! $response->successful() || ! is_array($payload) || ($payload['status'] ?? false) !== true) {
+                    Log::warning('Angel One historical OI request failed.', [
+                        'underlying' => $underlying,
+                        'symbol_token' => $chunk[$cacheKey]['token'],
+                        'http_status' => $response->status(),
+                        'error_code' => $payload['errorcode'] ?? null,
+                        'message' => $payload['message'] ?? null,
+                    ]);
+                    Cache::put($cacheKey, -1, now()->addMinute());
+                    continue;
+                }
+                if ($response?->successful() && is_array($payload) && ($payload['status'] ?? false) === true && is_array($payload['data'] ?? null)) {
+                    $contractTradingDate = $chunk[$cacheKey]['trading_date'];
+                    $previousSessionBaseline = null;
+                    $previousSessionTime = null;
+                    $sessionOpenBaseline = null;
+                    $sessionOpenTime = null;
+                    foreach ($payload['data'] as $record) {
+                        if (! is_array($record)) {
+                            continue;
+                        }
+                        $recordTime = is_string($record['time'] ?? null) ? $record['time'] : null;
+                        $recordDate = $recordTime !== null
+                            ? substr($recordTime, 0, 10)
+                            : null;
+                        if ($recordDate === null || ! is_numeric($record['oi'] ?? null)) {
+                            continue;
+                        }
+                        if ($recordDate < $contractTradingDate && ($previousSessionTime === null || $recordTime > $previousSessionTime)) {
+                            // Angel One's response ordering is not guaranteed; choose the latest
+                            // OI observation from any prior trading session, independent of order.
+                            $previousSessionTime = $recordTime;
+                            $previousSessionBaseline = (int) $record['oi'];
+                        } elseif ($recordDate === $contractTradingDate && ($sessionOpenTime === null || $recordTime < $sessionOpenTime)) {
+                            $sessionOpenTime = $recordTime;
+                            $sessionOpenBaseline = (int) $record['oi'];
+                        }
+                    }
+                    $baseline = $previousSessionBaseline ?? $sessionOpenBaseline;
+                    if ($baseline === null) {
+                        Log::info('Angel One historical OI response has no usable baseline.', [
+                            'underlying' => $underlying,
+                            'symbol_token' => $chunk[$cacheKey]['token'],
+                            'trading_date' => $contractTradingDate,
+                            'record_count' => count($payload['data']),
+                        ]);
+                    }
+                }
+                Cache::put($cacheKey, $baseline ?? -1, now()->addMinutes($baseline === null ? 5 : 36 * 60));
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $key = number_format((float) $row['strike'], 8, '.', '').':'.$row['option_type'];
+            $item = $lookup[$key] ?? null;
+            $baseline = $item
+                ? Cache::get("angel_one.oi_baseline.v4.{$underlying}.{$item['trading_date']}.{$item['contract']['token']}")
+                : null;
+            $currentOi = $row['open_interest'] ?? null;
+            $providerChange = $row['oi_change'] ?? null;
+            if (is_numeric($providerChange) && is_numeric($currentOi) && (int) $currentOi - (int) $providerChange > 0) {
+                $change = (int) $providerChange;
+                $row['oi_change'] = $change;
+                $row['oi_change_pct'] = ($change / ((int) $currentOi - $change)) * 100;
+            } elseif (is_numeric($baseline) && $baseline >= 0 && is_numeric($currentOi)) {
+                $change = (int) $currentOi - (int) $baseline;
+                $row['oi_change'] = $change;
+                $row['oi_change_pct'] = $baseline > 0 ? ($change / $baseline) * 100 : null;
+            } else {
+                $row['oi_change'] = null;
+                $row['oi_change_pct'] = null;
+            }
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /**
@@ -330,6 +527,27 @@ final class AngelOneQuotedOptionGreeksService
     }
 
     /**
+     * @param array<string, mixed> $quote
+     */
+    private function quoteTradeTime(array $quote): ?DateTimeImmutable
+    {
+        foreach (['exchTradeTime', 'exchFeedTime'] as $field) {
+            $value = $quote[$field] ?? null;
+            if (! is_string($value) || trim($value) === '') {
+                continue;
+            }
+
+            try {
+                return new DateTimeImmutable($value, new DateTimeZone('Asia/Kolkata'));
+            } catch (\Exception) {
+                // Fall back to the next timestamp or current time if the provider value is malformed.
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @return array{client_local_ip: string, client_public_ip: string, mac_address: string}
      */
     private function networkIdentity(): array
@@ -365,6 +583,22 @@ final class AngelOneQuotedOptionGreeksService
         }
         if (! is_numeric($value) || (float) $value < 0) {
             throw new RuntimeException('Angel One returned an invalid option open-interest value.');
+        }
+
+        return (int) $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $quote
+     */
+    private function openInterestChange(array $quote): ?int
+    {
+        $value = $quote['opnInterestChg'] ?? $quote['openInterestChange'] ?? null;
+        if ($value === null) {
+            return null;
+        }
+        if (! is_numeric($value)) {
+            throw new RuntimeException('Angel One returned an invalid option open-interest change value.');
         }
 
         return (int) $value;

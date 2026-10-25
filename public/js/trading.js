@@ -561,14 +561,13 @@
     function prepareAngelOneGreeksView(source = 'angel_one') {
         optionElements.tableHead.innerHTML = `
             <tr class="chain-group-row">
-                <th class="call-group" colspan="6">CALLS <span>CALL OPTIONS</span></th>
+                <th class="call-group" colspan="5">CALLS <span>CALL OPTIONS</span></th>
                 <th class="strike-group" rowspan="2">STRIKE</th>
-                <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
+                <th class="put-group" colspan="5">PUTS <span>PUT OPTIONS</span></th>
             </tr>
             <tr class="chain-columns-row">
                 <th class="col-call-pcr">Call PCR</th>
                 <th class="col-call-vol">Call Vol.</th>
-                <th class="col-call-oichg">Call OI Chg</th>
                 <th class="col-call-oichgpct">Call OI Chg %</th>
                 <th class="col-call-oi">Call OI (lakh)</th>
                 <th class="col-call-ltp">Call LTP</th>
@@ -576,7 +575,6 @@
                 <th class="col-put-ltp">Put LTP</th>
                 <th class="col-put-oi">Put OI (lakh)</th>
                 <th class="col-put-oichgpct">Put OI Chg %</th>
-                <th class="col-put-oichg">Put OI Chg</th>
                 <th class="col-put-vol">Put Vol.</th>
             </tr>
         `;
@@ -596,21 +594,20 @@
             : 'Sensibull-style Option Chain & Live Quotes from Angel One by strike.';
 
         optionElements.footerNote.textContent = quoteDerived
-            ? 'Open interest and volumes in lakhs/contracts from Angel One quotes. Stale or illiquid quotes can affect values.'
-            : 'LTP, OI change, and volume are from Angel One live market quotes.';
+            ? 'OI change is measured against the previous trading session close using Angel One historical OI. Missing history is shown as —.'
+            : 'OI change is measured against the previous trading session close using Angel One historical OI.';
     }
 
     function restoreDemoOptionChain() {
         optionElements.tableHead.innerHTML = `
             <tr class="chain-group-row">
-                <th class="call-group" colspan="6">CALLS <span>CALL OPTIONS</span></th>
+                <th class="call-group" colspan="5">CALLS <span>CALL OPTIONS</span></th>
                 <th class="strike-group" rowspan="2">STRIKE</th>
-                <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
+                <th class="put-group" colspan="5">PUTS <span>PUT OPTIONS</span></th>
             </tr>
             <tr class="chain-columns-row">
                 <th class="col-call-pcr">Call PCR</th>
                 <th class="col-call-vol">Call Vol.</th>
-                <th class="col-call-oichg">Call OI Chg</th>
                 <th class="col-call-oichgpct">Call OI Chg %</th>
                 <th class="col-call-oi">Call OI (lakh)</th>
                 <th class="col-call-ltp">Call LTP</th>
@@ -618,7 +615,6 @@
                 <th class="col-put-ltp">Put LTP</th>
                 <th class="col-put-oi">Put OI (lakh)</th>
                 <th class="col-put-oichgpct">Put OI Chg %</th>
-                <th class="col-put-oichg">Put OI Chg</th>
                 <th class="col-put-vol">Put Vol.</th>
             </tr>
         `;
@@ -660,7 +656,7 @@
         if (!rows.length) {
             optionElements.body.innerHTML = `
                 <tr>
-                    <td colspan="13" class="chain-error">
+            <td colspan="11" class="chain-error">
                         Angel One returned no live option data for this underlying and expiry.
                     </td>
                 </tr>
@@ -743,12 +739,11 @@
             const pOi = Number(p.open_interest) || 0;
             const strikePcr = cOi > 0 ? (pOi / cOi).toFixed(1) : (pOi > 0 ? '—' : '—');
 
-            // Volumes in thousands (k) or contracts (e.g. Sensibull shows volume in thousands)
+            // Angel One reports volume in units; Sensibull's displayed figure is in lakh units.
             const formatVol = (v) => {
                 if (v == null || v === '' || isNaN(v)) return '—';
                 const num = Number(v);
-                if (num >= 1000) return (num / 1000).toFixed(num >= 10000 ? 0 : 1);
-                return num.toString();
+                return (num / 100000).toFixed(0);
             };
             const cVol = formatVol(c.trade_volume);
             const pVol = formatVol(p.trade_volume);
@@ -762,9 +757,6 @@
             const pOiChgRaw = p.market_data?.opnInterestChg != null 
                 ? Number(p.market_data.opnInterestChg) 
                 : (p.oi_change != null ? Number(p.oi_change) : null);
-
-            const cOiChgLakh = cOiChgRaw != null ? (cOiChgRaw / 100000).toFixed(1) : '—';
-            const pOiChgLakh = pOiChgRaw != null ? (pOiChgRaw / 100000).toFixed(1) : '—';
 
             // Percent change in OI: (OI Chg / (Current OI - OI Chg)) * 100
             const calcOiChgPct = (currOi, chg) => {
@@ -794,10 +786,9 @@
 
             return `
                 <tr class="${isAtm ? 'atm-row' : ''}">
-                    <!-- CALLS: Call PCR, Call Vol., Call OI Chg, Call OI Chg %, Call OI (lakh), Call LTP -->
+                    <!-- CALLS: PCR, volume, OI change %, OI, LTP -->
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${strikePcr}</td>
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cVol}</td>
-                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(Number(cOiChgLakh) || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgLakh}</td>
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPctStr}</td>
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%">${toLakhs(c.open_interest)}</td>
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${callPnlClass}"><strong>${cLtp}</strong></td>
@@ -805,12 +796,11 @@
                     <!-- STRIKE (CENTER) -->
                     <td class="strike-cell ${isAtm ? 'atm-strike-active' : ''}">${formatContracts(s.strike)}${isAtm ? ' · ATM' : ''}</td>
 
-                    <!-- PUTS: Put IV, Put LTP, Put OI (lakh), Put OI Chg %, Put OI Chg, Put Vol. -->
+                    <!-- PUTS: IV, LTP, OI, OI change %, volume -->
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pIv}</td>
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${putPnlClass}"><strong>${pLtp}</strong></td>
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%">${toLakhs(p.open_interest)}</td>
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPctStr}</td>
-                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(Number(pOiChgLakh) || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgLakh}</td>
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pVol}</td>
                 </tr>
             `;
@@ -825,7 +815,7 @@
 
         optionElements.body.innerHTML = `
             <tr>
-                <td colspan="${angelOneConnected ? 13 : 11}" class="chain-loading">
+                <td colspan="11" class="chain-loading">
                     <span class="spinner"></span>
                     Loading ${angelOneConnected ? 'live Angel One option data' : 'simulated option chain'}…
                 </td>
@@ -843,7 +833,7 @@
                 if (!expiry) {
                     optionElements.body.innerHTML = `
                         <tr>
-                            <td colspan="13" class="chain-error">
+                            <td colspan="11" class="chain-error">
                                 Choose an expiry listed by Angel One for this underlying.
                             </td>
                         </tr>
@@ -913,10 +903,8 @@
                 const strikePcr = row.call.oi > 0 ? (row.put.oi / row.call.oi).toFixed(1) : '—';
                 const cVol = (row.call.volume / 1000).toFixed(0);
                 const pVol = (row.put.volume / 1000).toFixed(0);
-                const cOiChgLakh = (row.call.oiChange / 100000).toFixed(1);
-                const pOiChgLakh = (row.put.oiChange / 100000).toFixed(1);
-                const cOiChgPct = row.call.oi ? ((row.call.oiChange / row.call.oi) * 100).toFixed(1) : 0;
-                const pOiChgPct = row.put.oi ? ((row.put.oiChange / row.put.oi) * 100).toFixed(1) : 0;
+                const cOiChgPct = row.call.oi ? ((row.call.oiChange / (row.call.oi - row.call.oiChange)) * 100).toFixed(1) : 0;
+                const pOiChgPct = row.put.oi ? ((row.put.oiChange / (row.put.oi - row.put.oiChange)) * 100).toFixed(1) : 0;
                 const cOiLakh = (row.call.oi / 100000).toFixed(1);
                 const pOiLakh = (row.put.oi / 100000).toFixed(1);
 
@@ -925,10 +913,9 @@
 
                 return `
                     <tr class="${row.isAtm ? 'atm-row' : ''}">
-                        <!-- CALLS: Call PCR, Call Vol., Call OI Chg, Call OI Chg %, Call OI (lakh), Call LTP -->
+                        <!-- CALLS: PCR, volume, OI change %, OI, LTP -->
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${strikePcr}</td>
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cVol}</td>
-                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cOiChgLakh}</td>
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${cOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPct > 0 ? '+' : ''}${cOiChgPct}%</td>
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%">${cOiLakh}</td>
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}"><strong>${Number(row.call.ltp).toFixed(2)}</strong></td>
@@ -936,12 +923,11 @@
                         <!-- STRIKE -->
                         <td class="strike-cell ${row.isAtm ? 'atm-strike-active' : ''}">${formatContracts(row.strike)}${row.isAtm ? ' · ATM' : ''}</td>
 
-                        <!-- PUTS: Put IV, Put LTP, Put OI (lakh), Put OI Chg %, Put OI Chg, Put Vol. -->
+                        <!-- PUTS: IV, LTP, OI, OI change %, volume -->
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${Number(row.put.iv).toFixed(1)}</td>
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}"><strong>${Number(row.put.ltp).toFixed(2)}</strong></td>
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%">${pOiLakh}</td>
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${pOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPct > 0 ? '+' : ''}${pOiChgPct}%</td>
-                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pOiChgLakh}</td>
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pVol}</td>
                     </tr>
                 `;
@@ -951,7 +937,7 @@
 
             optionElements.body.innerHTML = `
                 <tr>
-                    <td colspan="13" class="chain-error">
+                    <td colspan="11" class="chain-error">
                         ${escapeHtml(error.message)}
                     </td>
                 </tr>

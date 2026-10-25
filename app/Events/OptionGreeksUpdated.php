@@ -22,7 +22,7 @@ final class OptionGreeksUpdated implements ShouldBroadcastNow
      *     gamma: float,
      *     theta: float,
      *     vega: float,
-     *     implied_volatility: float,
+     *     implied_volatility: float|null,
      *     ltp: float,
      *     open_interest: ?int,
      *     trade_volume: int

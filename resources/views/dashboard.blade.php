@@ -142,7 +142,6 @@
                             <colgroup>
                                 <col class="col-call-pcr">
                                 <col class="col-call-vol">
-                                <col class="col-call-oichg">
                                 <col class="col-call-oichgpct">
                                 <col class="col-call-oi">
                                 <col class="col-call-ltp">
@@ -151,19 +150,17 @@
                                 <col class="col-put-ltp">
                                 <col class="col-put-oi">
                                 <col class="col-put-oichgpct">
-                                <col class="col-put-oichg">
                                 <col class="col-put-vol">
                             </colgroup>
                             <thead>
                                 <tr class="chain-group-row">
-                                    <th class="call-group" colspan="6">CALLS <span>CALL OPTIONS</span></th>
+                                    <th class="call-group" colspan="5">CALLS <span>CALL OPTIONS</span></th>
                                     <th class="strike-group" rowspan="2">STRIKE</th>
-                                    <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
+                                    <th class="put-group" colspan="5">PUTS <span>PUT OPTIONS</span></th>
                                 </tr>
                                 <tr class="chain-columns-row">
                                     <th>Call PCR</th>
                                     <th>Call Vol.</th>
-                                    <th>Call OI Chg</th>
                                     <th>Call OI Chg %</th>
                                     <th>Call OI (lakh)</th>
                                     <th>Call LTP</th>
@@ -171,12 +168,11 @@
                                     <th>Put LTP</th>
                                     <th>Put OI (lakh)</th>
                                     <th>Put OI Chg %</th>
-                                    <th>Put OI Chg</th>
                                     <th>Put Vol.</th>
                                 </tr>
                             </thead>
                             <tbody id="option-chain-body">
-                                <tr><td colspan="13" class="chain-loading"><span class="spinner"></span> Loading option chain…</td></tr>
+                                <tr><td colspan="11" class="chain-loading"><span class="spinner"></span> Loading option chain…</td></tr>
                             </tbody>
                         </table>
                     </div>
