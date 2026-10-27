@@ -81,6 +81,8 @@
     let optionExpiryRequestId = 0;
     let optionChainInitialized = false;
     let liveSubscriptionTimer;
+    let liveFallbackTimer;
+    let liveFallbackRequest = false;
     let liveSubscriptionSelection = '';
     let liveSubscriptionErrorShown = false;
 
@@ -818,13 +820,16 @@
         }).join('');
     }
 
-    async function refreshOptionChain() {
+    async function refreshOptionChain({ silent = false } = {}) {
+        if (silent && liveFallbackRequest) return;
+        if (silent) liveFallbackRequest = true;
+
         const provider = window.optionChainProvider;
         const underlying = optionElements.underlying.value;
         const expiry = optionElements.expiry.value;
         const requestId = ++optionChainRequestId;
 
-        optionElements.body.innerHTML = `
+        if (!silent) optionElements.body.innerHTML = `
             <tr>
                 <td colspan="13" class="chain-loading">
                     <span class="spinner"></span>
@@ -862,6 +867,14 @@
                 if (requestId !== optionChainRequestId) return;
 
                 renderAngelOneGreeks(liveData);
+                if (silent) {
+                    optionElements.updated.textContent =
+                        `HTTP live refresh · ${new Intl.DateTimeFormat(undefined, {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            second: '2-digit',
+                        }).format(new Date())}`;
+                }
                 return;
             }
 
@@ -950,6 +963,11 @@
         } catch (error) {
             if (requestId !== optionChainRequestId) return;
 
+            if (silent) {
+                optionElements.updated.textContent = 'Live refresh failed';
+                return;
+            }
+
             optionElements.body.innerHTML = `
                 <tr>
                     <td colspan="13" class="chain-error">
@@ -959,6 +977,8 @@
             `;
 
             showToast(error.message, true);
+        } finally {
+            if (silent) liveFallbackRequest = false;
         }
     }
 
@@ -1108,7 +1128,21 @@
         const selection =
             `${optionElements.underlying.value}:${expiry}`;
 
-        if (!expiry || selection === liveSubscriptionSelection) return;
+        if (!expiry) return;
+
+        if (!liveFallbackTimer) {
+            liveFallbackTimer = window.setInterval(() => {
+                if (
+                    angelOneConnected &&
+                    !document.hidden &&
+                    isIndianMarketOpen()
+                ) {
+                    refreshOptionChain({ silent: true });
+                }
+            }, 4000);
+        }
+
+        if (selection === liveSubscriptionSelection) return;
 
         liveSubscriptionSelection = '';
 
@@ -1120,6 +1154,23 @@
                 20000
             );
         }
+    }
+
+    function isIndianMarketOpen() {
+        const parts = Object.fromEntries(
+            new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Kolkata',
+                weekday: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+                hourCycle: 'h23',
+            }).formatToParts(new Date()).map(({ type, value }) => [type, value])
+        );
+        const minuteOfDay = Number(parts.hour) * 60 + Number(parts.minute);
+
+        return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(parts.weekday)
+            && minuteOfDay >= 9 * 60 + 15
+            && minuteOfDay <= 15 * 60 + 30;
     }
 
     function setAngelOneConnected(connected, clientCode = '') {
@@ -1293,11 +1344,14 @@
 
     window.addEventListener('marketboard:live-greeks', (event) => {
         const update = event.detail;
+        const updateUnderlying = String(update.underlying ?? '').toUpperCase();
+        const updateExpiry = String(update.expiry_date ?? '').slice(0, 10);
+        const selectedExpiry = String(optionElements.expiry.value ?? '').slice(0, 10);
 
         if (
             !angelOneConnected ||
-            update.underlying !== optionElements.underlying.value ||
-            update.expiry_date !== optionElements.expiry.value
+            updateUnderlying !== optionElements.underlying.value.toUpperCase() ||
+            updateExpiry !== selectedExpiry
         ) {
             return;
         }
@@ -1392,6 +1446,8 @@
 
             window.clearInterval(liveSubscriptionTimer);
             liveSubscriptionTimer = undefined;
+            window.clearInterval(liveFallbackTimer);
+            liveFallbackTimer = undefined;
 
             angelOneElements.panel.open = false;
 

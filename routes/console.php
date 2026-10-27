@@ -22,7 +22,8 @@ Artisan::command('inspire', function () {
 
 Schedule::command('option-chain:broadcast-live')
     ->everyFiveSeconds()
-    ->between(config('app.market_open', '09:00'), config('app.market_close', '18:00'))
+    ->between(config('app.market_open', '09:15'), config('app.market_close', '15:30'))
+    ->timezone('Asia/Kolkata')
     ->weekdays()
     ->withoutOverlapping()
     ->runInBackground();
