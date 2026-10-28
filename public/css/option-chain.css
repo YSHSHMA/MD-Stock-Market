@@ -1032,21 +1032,50 @@
     letter-spacing: 0.3px;
 }
 
-/* 7. Indicator Layer (Call Pink/Red Bars & Put Green Bars) */
-.option-chain-table td.call-cell {
-    background-image: linear-gradient(90deg, var(--sb-call-bar) 0 var(--depth), transparent var(--depth));
+/* 7. Sensibull-style OI bars: slim rounded pills, pointed toward the ATM strike. */
+.option-chain-table td.call-cell,
+.option-chain-table td.put-cell {
+    background-image: none;
 }
 
-.option-chain-table tbody tr:hover td.call-cell {
-    background-image: linear-gradient(90deg, var(--sb-call-bar-hover) 0 var(--depth), transparent var(--depth));
+.option-chain-table .oi-progress {
+    display: block;
+    width: var(--depth);
+    min-width: 2px;
+    max-width: 100%;
+    height: 10px;
+    border-radius: 999px;
+}
+
+.option-chain-table td.call-cell,
+.option-chain-table td.put-cell {
+    vertical-align: middle;
+}
+
+.option-chain-table td.call-cell .oi-progress {
+    margin-left: auto;
+    background: #ffdde1;
+}
+
+.option-chain-table td.call-cell {
+    padding-right: 3px;
+}
+
+.option-chain-table td.put-cell .oi-progress {
+    margin-right: auto;
+    background: #d9f3e0;
 }
 
 .option-chain-table td.put-cell {
-    background-image: linear-gradient(90deg, var(--sb-put-bar) 0 var(--depth), transparent var(--depth));
+    padding-left: 3px;
 }
 
-.option-chain-table tbody tr:hover td.put-cell {
-    background-image: linear-gradient(90deg, var(--sb-put-bar-hover) 0 var(--depth), transparent var(--depth));
+.option-chain-table tbody tr:hover td.call-cell .oi-progress {
+    background: #ffcbd2;
+}
+
+.option-chain-table tbody tr:hover td.put-cell .oi-progress {
+    background: #c3ebcf;
 }
 
 /* Positive / Negative Color Cues */

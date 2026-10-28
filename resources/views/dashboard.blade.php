@@ -7,7 +7,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>MB · {{ config('app.name', 'Marketboard') }}</title>
     <link rel="stylesheet" href="{{ asset('css/trading.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/option-chain.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/option-chain.css') }}?v={{ filemtime(public_path('css/option-chain.css')) }}">
 </head>
 <body class="dashboard-page">
     <div class="app-shell">
@@ -226,7 +226,7 @@
         };
     </script>
     @vite('resources/js/market-stream.js')
-    <script src="{{ asset('js/option-chain-demo.js') }}" defer></script>
-    <script src="{{ asset('js/trading.js') }}" defer></script>
+    <script src="{{ asset('js/option-chain-demo.js') }}?v={{ filemtime(public_path('js/option-chain-demo.js')) }}" defer></script>
+    <script src="{{ asset('js/trading.js') }}?v={{ filemtime(public_path('js/trading.js')) }}" defer></script>
 </body>
 </html>
