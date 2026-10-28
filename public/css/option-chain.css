@@ -1035,25 +1035,31 @@
 /* 7. Sensibull-style OI bars: slim rounded pills, pointed toward the ATM strike. */
 .option-chain-table td.call-cell,
 .option-chain-table td.put-cell {
+    position: relative;
+    isolation: isolate;
     background-image: none;
-}
-
-.option-chain-table .oi-progress {
-    display: block;
-    width: var(--depth);
-    min-width: 2px;
-    max-width: 100%;
-    height: 10px;
-    border-radius: 999px;
-}
-
-.option-chain-table td.call-cell,
-.option-chain-table td.put-cell {
     vertical-align: middle;
 }
 
+.option-chain-table .oi-progress {
+    position: absolute;
+    z-index: 0;
+    top: 50%;
+    width: var(--depth);
+    min-width: 2px;
+    max-width: calc(100% - 3px);
+    height: 10px;
+    border-radius: 999px;
+    transform: translateY(-50%);
+}
+
+.option-chain-table .oi-progress-value {
+    position: relative;
+    z-index: 1;
+}
+
 .option-chain-table td.call-cell .oi-progress {
-    margin-left: auto;
+    right: 3px;
     background: #ffdde1;
 }
 
@@ -1062,7 +1068,7 @@
 }
 
 .option-chain-table td.put-cell .oi-progress {
-    margin-right: auto;
+    left: 3px;
     background: #d9f3e0;
 }
 

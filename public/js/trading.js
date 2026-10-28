@@ -802,7 +802,7 @@
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cVol}</td>
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgLakh}</td>
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPctStr}</td>
-                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%" aria-label="Call OI ${toLakhs(c.open_interest)}" title="Call OI ${toLakhs(c.open_interest)}"><span class="oi-progress" aria-hidden="true"></span></td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%" aria-label="Call OI ${toLakhs(c.open_interest)}" title="Call OI ${toLakhs(c.open_interest)}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${toLakhs(c.open_interest)}</span></td>
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${callPnlClass}"><strong>${cLtp}</strong></td>
 
                     <!-- STRIKE (CENTER) -->
@@ -811,7 +811,7 @@
                     <!-- PUTS: IV, LTP, OI, OI change %, OI change, volume -->
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pIv}</td>
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${putPnlClass}"><strong>${pLtp}</strong></td>
-                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%" aria-label="Put OI ${toLakhs(p.open_interest)}" title="Put OI ${toLakhs(p.open_interest)}"><span class="oi-progress" aria-hidden="true"></span></td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%" aria-label="Put OI ${toLakhs(p.open_interest)}" title="Put OI ${toLakhs(p.open_interest)}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${toLakhs(p.open_interest)}</span></td>
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPctStr}</td>
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgLakh}</td>
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pVol}</td>
@@ -944,7 +944,7 @@
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cVol}</td>
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${row.call.oiChange < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgLakh}</td>
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${cOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPct > 0 ? '+' : ''}${cOiChgPct}%</td>
-                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%" aria-label="Call OI ${cOiLakh}" title="Call OI ${cOiLakh}"><span class="oi-progress" aria-hidden="true"></span></td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%" aria-label="Call OI ${cOiLakh}" title="Call OI ${cOiLakh}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${cOiLakh}</span></td>
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}"><strong>${Number(row.call.ltp).toFixed(2)}</strong></td>
 
                         <!-- STRIKE -->
@@ -953,7 +953,7 @@
                         <!-- PUTS: IV, LTP, OI, OI change %, OI change, volume -->
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${Number(row.put.iv).toFixed(1)}</td>
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}"><strong>${Number(row.put.ltp).toFixed(2)}</strong></td>
-                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%" aria-label="Put OI ${pOiLakh}" title="Put OI ${pOiLakh}"><span class="oi-progress" aria-hidden="true"></span></td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%" aria-label="Put OI ${pOiLakh}" title="Put OI ${pOiLakh}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${pOiLakh}</span></td>
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${pOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPct > 0 ? '+' : ''}${pOiChgPct}%</td>
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${row.put.oiChange < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgLakh}</td>
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pVol}</td>
