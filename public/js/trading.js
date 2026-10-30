@@ -565,16 +565,16 @@
 
     const optionViewColumns = {
         ltp: {
-            call: ['Call PCR', 'Call Vol.', 'Call OI Chg (lakh)', 'Call OI Chg %', 'Call OI (lakh)', 'Call LTP'],
-            put: ['Put IV', 'Put LTP', 'Put OI (lakh)', 'Put OI Chg %', 'Put OI Chg (lakh)', 'Put Vol.'],
+            call: ['Call PCR', 'Call Vol.', 'Call OI Chg (lakh)', 'Call OI Chg %', 'Call OI (lakh)', 'Call LTP', 'R Reversal'],
+            put: ['S Reversal', 'Put IV', 'Put LTP', 'Put OI (lakh)', 'Put OI Chg %', 'Put OI Chg (lakh)', 'Put Vol.'],
         },
         greeks: {
-            call: ['Gamma', 'Vega', 'Theta', 'Delta', 'Call OI Chg (lakh)', 'Call OI (lakh)', 'Call LTP'],
-            put: ['Put LTP', 'Put OI (lakh)', 'Put OI Chg (lakh)', 'Delta', 'Theta', 'Vega', 'Gamma'],
+            call: ['Gamma', 'Vega', 'Theta', 'Delta', 'Call OI Chg (lakh)', 'Call OI (lakh)', 'Call LTP', 'R Reversal'],
+            put: ['S Reversal', 'Put LTP', 'Put OI (lakh)', 'Put OI Chg (lakh)', 'Delta', 'Theta', 'Vega', 'Gamma'],
         },
         all: {
-            call: ['Call PCR', 'Call Vol.', 'Call OI Chg (lakh)', 'Call OI Chg %', 'Gamma', 'Vega', 'Theta', 'Delta', 'Call OI (lakh)', 'Call LTP'],
-            put: ['Put IV', 'Put LTP', 'Put OI (lakh)', 'Put OI Chg %', 'Put OI Chg (lakh)', 'Put Vol.', 'Delta', 'Theta', 'Vega', 'Gamma'],
+            call: ['Call PCR', 'Call Vol.', 'Call OI Chg (lakh)', 'Call OI Chg %', 'Gamma', 'Vega', 'Theta', 'Delta', 'Call OI (lakh)', 'Call LTP', 'R Reversal'],
+            put: ['S Reversal', 'Put IV', 'Put LTP', 'Put OI (lakh)', 'Put OI Chg %', 'Put OI Chg (lakh)', 'Put Vol.', 'Delta', 'Theta', 'Vega', 'Gamma'],
         },
     };
 
@@ -593,8 +593,8 @@
                 <th class="put-group" colspan="${columns.put.length}">PUTS <span>PUT OPTIONS</span></th>
             </tr>
             <tr class="chain-columns-row">
-                ${columns.call.map((label) => `<th>${label}</th>`).join('')}
-                ${columns.put.map((label) => `<th>${label}</th>`).join('')}
+                ${columns.call.map((label) => `<th class="${label.includes('Reversal') ? 'reversal-heading' : ''}">${label}</th>`).join('')}
+                ${columns.put.map((label) => `<th class="${label.includes('Reversal') ? 'reversal-heading' : ''}">${label}</th>`).join('')}
             </tr>
         `;
 
@@ -611,6 +611,34 @@
     function optionOiCell(side, zone, depth, value, rankClass = '') {
         const label = `${side === 'call' ? 'Call' : 'Put'} OI ${value}`;
         return `<td class="cell-${side} ${zone} ${side}-cell ${rankClass}" style="--depth:${depth}%" aria-label="${label}" title="${label}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${value}</span></td>`;
+    }
+
+    function selectAtmWindow(rows, spot, getStrike, isAtmCandidate = () => false) {
+        if (rows.length <= 13) return rows;
+        let atmIndex = rows.findIndex(isAtmCandidate);
+        if (Number.isFinite(Number(spot)) && Number(spot) > 0) {
+            atmIndex = rows.reduce((best, row, index) =>
+                Math.abs(getStrike(row) - Number(spot)) < Math.abs(getStrike(rows[best]) - Number(spot)) ? index : best, 0);
+        }
+        if (atmIndex < 0) atmIndex = Math.floor(rows.length / 2);
+        const start = Math.max(0, Math.min(atmIndex - 6, rows.length - 13));
+        return rows.slice(start, start + 13);
+    }
+
+    function reversalValues(strike, call, put) {
+        const number = (value) => value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+        const callTheta = number(call?.theta);
+        const callVega = number(call?.vega);
+        const putTheta = number(put?.theta);
+        const putVega = number(put?.vega);
+        return {
+            r: putTheta == null || putVega == null ? '—' : (strike + Math.abs(putTheta) + Math.abs(putVega)).toFixed(2),
+            s: callTheta == null || callVega == null ? '—' : (strike - Math.abs(callTheta) - Math.abs(callVega)).toFixed(2),
+        };
+    }
+
+    function reversalCell(side, zone, value) {
+        return optionMetricCell(side, zone, value, 'reversal-cell');
     }
 
     function rankTopThree(rows, getValue, getKey) {
@@ -815,6 +843,10 @@
             call: buildLtpRanks(sortedStrikes, (row) => row.call),
             put: buildLtpRanks(sortedStrikes, (row) => row.put),
         };
+        const visibleStrikes = selectAtmWindow(sortedStrikes,
+            response.underlying_spot ?? response.spot_price ?? response.spot,
+            (row) => row.strike,
+            (row) => row.call?.delta != null && Math.abs(Number(row.call.delta) - 0.5) < 0.04);
 
         // Update summary metrics
         optionElements.callOi.textContent = formatContracts(totalCallOi);
@@ -835,10 +867,10 @@
             optionElements.spot.textContent = optionMoney(spotPrice);
         }
 
-        optionElements.body.innerHTML = sortedStrikes.map((s) => {
+        optionElements.body.innerHTML = visibleStrikes.map((s, visibleIndex) => {
             const c = s.call || {};
             const p = s.put || {};
-            const isAtm = spotPrice ? Math.abs(s.strike - spotPrice) < 50 : (c.delta != null && Math.abs(c.delta - 0.5) < 0.04);
+            const isAtm = visibleIndex === Math.floor(visibleStrikes.length / 2);
             const isCallItm = spotPrice ? s.strike < spotPrice : (c.delta != null && c.delta > 0.5);
             const isPutItm = spotPrice ? s.strike > spotPrice : (p.delta != null && Math.abs(p.delta) > 0.5);
             const callDepth = c.open_interest ? Math.round((c.open_interest / maxCallOi) * 100) : 0;
@@ -908,15 +940,18 @@
             const putOiCell = optionOiCell('put', putZone, putDepth, putOiValue, putRank('oi'));
             const callLtpCell = optionMetricCell('call', callZone, `<strong>${cLtp}</strong>`, callPnlClass);
             const putLtpCell = optionMetricCell('put', putZone, `<strong>${pLtp}</strong>`, putPnlClass);
+            const reversal = reversalValues(s.strike, c, p);
+            const rReversalCell = reversalCell('call', callZone, reversal.r);
+            const sReversalCell = reversalCell('put', putZone, reversal.s);
             const callOiChangeCell = optionMetricCell('call', callZone, cOiChgLakh, (cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell');
             const putOiChangeCell = optionMetricCell('put', putZone, pOiChgLakh, (pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell');
             const strikeCell = `<td class="strike-cell ${isAtm ? 'atm-strike-active' : ''}">${formatContracts(s.strike)}${isAtm ? ' · ATM' : ''}</td>`;
 
             if (selectedOptionView === 'greeks') {
                 return `<tr class="${isAtm ? 'atm-row' : ''}">
-                    ${optionGreekCells('call', callZone, c)}${callOiChangeCell}${callOiCell}${callLtpCell}
+                    ${optionGreekCells('call', callZone, c)}${callOiChangeCell}${callOiCell}${callLtpCell}${rReversalCell}
                     ${strikeCell}
-                    ${putLtpCell}${putOiCell}${putOiChangeCell}${optionGreekCells('put', putZone, p, ['delta', 'theta', 'vega', 'gamma'])}
+                    ${sReversalCell}${putLtpCell}${putOiCell}${putOiChangeCell}${optionGreekCells('put', putZone, p, ['delta', 'theta', 'vega', 'gamma'])}
                 </tr>`;
             }
 
@@ -924,9 +959,9 @@
                 return `<tr class="${isAtm ? 'atm-row' : ''}">
                     ${optionMetricCell('call', callZone, strikePcr)}${optionMetricCell('call', callZone, cVol)}${callOiChangeCell}
                     ${optionMetricCell('call', callZone, cOiChgPctStr, (cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell')}
-                    ${optionGreekCells('call', callZone, c)}${callOiCell}${callLtpCell}
+                    ${optionGreekCells('call', callZone, c)}${callOiCell}${callLtpCell}${rReversalCell}
                     ${strikeCell}
-                    ${optionMetricCell('put', putZone, pIv)}${putLtpCell}${putOiCell}
+                    ${sReversalCell}${optionMetricCell('put', putZone, pIv)}${putLtpCell}${putOiCell}
                     ${optionMetricCell('put', putZone, pOiChgPctStr, (pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell')}
                     ${putOiChangeCell}${optionMetricCell('put', putZone, pVol)}
                     ${optionGreekCells('put', putZone, p, ['delta', 'theta', 'vega', 'gamma'])}
@@ -944,7 +979,7 @@
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${callPnlClass}"><strong>${cLtp}</strong></td>
 
                     <!-- STRIKE (CENTER) -->
-                    <td class="strike-cell ${isAtm ? 'atm-strike-active' : ''}">${formatContracts(s.strike)}${isAtm ? ' · ATM' : ''}</td>
+                    ${rReversalCell}<td class="strike-cell ${isAtm ? 'atm-strike-active' : ''}">${formatContracts(s.strike)}${isAtm ? ' · ATM' : ''}</td>${sReversalCell}
 
                     <!-- PUTS: IV, LTP, OI, OI change %, OI change, volume -->
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pIv}</td>
@@ -1063,8 +1098,9 @@
                 call: buildLtpRanks(chain.rows, (row) => row.call),
                 put: buildLtpRanks(chain.rows, (row) => row.put),
             };
+            const visibleRows = selectAtmWindow(chain.rows, chain.spot, (row) => row.strike, (row) => row.isAtm);
 
-            optionElements.body.innerHTML = chain.rows.map((row) => {
+            optionElements.body.innerHTML = visibleRows.map((row, visibleIndex) => {
                 const callDepth = Math.round((row.call.oi / maxCallOi) * 100);
                 const putDepth = Math.round((row.put.oi / maxPutOi) * 100);
                 const strikePcr = row.call.oi > 0 ? (row.put.oi / row.call.oi).toFixed(1) : '—';
@@ -1089,30 +1125,34 @@
                 const putLtpCell = optionMetricCell('put', putZone, `<strong>${Number(row.put.ltp).toFixed(2)}</strong>`);
                 const callOiChangeCell = optionMetricCell('call', callZone, cOiChgLakh, row.call.oiChange < 0 ? 'negative-cell' : 'positive-cell');
                 const putOiChangeCell = optionMetricCell('put', putZone, pOiChgLakh, row.put.oiChange < 0 ? 'negative-cell' : 'positive-cell');
-                const strikeCell = `<td class="strike-cell ${row.isAtm ? 'atm-strike-active' : ''}">${formatContracts(row.strike)}${row.isAtm ? ' · ATM' : ''}</td>`;
+                const isAtm = visibleIndex === Math.floor(visibleRows.length / 2);
+                const reversal = reversalValues(row.strike, row.call, row.put);
+                const rReversalCell = reversalCell('call', callZone, reversal.r);
+                const sReversalCell = reversalCell('put', putZone, reversal.s);
+                const strikeCell = `<td class="strike-cell ${isAtm ? 'atm-strike-active' : ''}">${formatContracts(row.strike)}${isAtm ? ' · ATM' : ''}</td>`;
 
                 if (selectedOptionView === 'greeks') {
-                    return `<tr class="${row.isAtm ? 'atm-row' : ''}">
+                    return `<tr class="${isAtm ? 'atm-row' : ''}">
                         ${optionGreekCells('call', callZone, row.call)}${callOiChangeCell}${callOiCell}${callLtpCell}
-                        ${strikeCell}
+                        ${rReversalCell}${strikeCell}${sReversalCell}
                         ${putLtpCell}${putOiCell}${putOiChangeCell}${optionGreekCells('put', putZone, row.put, ['delta', 'theta', 'vega', 'gamma'])}
                     </tr>`;
                 }
 
                 if (selectedOptionView === 'all') {
-                    return `<tr class="${row.isAtm ? 'atm-row' : ''}">
+                    return `<tr class="${isAtm ? 'atm-row' : ''}">
                         ${optionMetricCell('call', callZone, strikePcr)}${optionMetricCell('call', callZone, cVol)}${callOiChangeCell}
                         ${optionMetricCell('call', callZone, `${cOiChgPct > 0 ? '+' : ''}${cOiChgPct}%`)}
-                        ${optionGreekCells('call', callZone, row.call)}${callOiCell}${callLtpCell}
+                        ${optionGreekCells('call', callZone, row.call)}${callOiCell}${callLtpCell}${rReversalCell}
                         ${strikeCell}
-                        ${optionMetricCell('put', putZone, Number(row.put.iv).toFixed(1))}${putLtpCell}${putOiCell}
+                        ${sReversalCell}${optionMetricCell('put', putZone, Number(row.put.iv).toFixed(1))}${putLtpCell}${putOiCell}
                         ${optionMetricCell('put', putZone, `${pOiChgPct > 0 ? '+' : ''}${pOiChgPct}%`)}${putOiChangeCell}${optionMetricCell('put', putZone, pVol)}
                         ${optionGreekCells('put', putZone, row.put, ['delta', 'theta', 'vega', 'gamma'])}
                     </tr>`;
                 }
 
-                return `
-                    <tr class="${row.isAtm ? 'atm-row' : ''}">
+                    return `
+                    <tr class="${isAtm ? 'atm-row' : ''}">
                         <!-- CALLS: PCR, volume, OI change, OI change %, OI, LTP -->
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${strikePcr}</td>
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${callRank('volume')}">${cVol}</td>
@@ -1122,7 +1162,7 @@
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}"><strong>${Number(row.call.ltp).toFixed(2)}</strong></td>
 
                         <!-- STRIKE -->
-                        <td class="strike-cell ${row.isAtm ? 'atm-strike-active' : ''}">${formatContracts(row.strike)}${row.isAtm ? ' · ATM' : ''}</td>
+                        ${rReversalCell}<td class="strike-cell ${isAtm ? 'atm-strike-active' : ''}">${formatContracts(row.strike)}${isAtm ? ' · ATM' : ''}</td>${sReversalCell}
 
                         <!-- PUTS: IV, LTP, OI, OI change %, OI change, volume -->
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${Number(row.put.iv).toFixed(1)}</td>

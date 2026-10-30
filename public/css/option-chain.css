@@ -1011,6 +1011,22 @@
     box-shadow: 1px 0 0 var(--sb-border), -1px 0 0 var(--sb-border);
 }
 
+.option-chain-table th.reversal-heading {
+    background: #eef5f2;
+    color: #285e4c;
+}
+
+.option-chain-table td.reversal-cell {
+    background-color: #f2f8f5;
+    color: #245b48;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.option-chain-table tbody tr:hover td.reversal-cell {
+    background-color: #e6f2ec;
+}
+
 .option-chain-table tbody tr:hover td.strike-cell {
     background-color: #eef2f5;
 }
