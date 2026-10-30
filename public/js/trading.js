@@ -608,9 +608,73 @@
         return `<td class="cell-${side} ${zone} ${extraClass}">${value}</td>`;
     }
 
-    function optionOiCell(side, zone, depth, value) {
+    function optionOiCell(side, zone, depth, value, rankClass = '') {
         const label = `${side === 'call' ? 'Call' : 'Put'} OI ${value}`;
-        return `<td class="cell-${side} ${zone} ${side}-cell" style="--depth:${depth}%" aria-label="${label}" title="${label}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${value}</span></td>`;
+        return `<td class="cell-${side} ${zone} ${side}-cell ${rankClass}" style="--depth:${depth}%" aria-label="${label}" title="${label}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${value}</span></td>`;
+    }
+
+    function rankTopThree(rows, getValue, getKey) {
+        const sorted = rows.map((row, index) => {
+            const rawValue = getValue(row);
+            return {
+                key: String(getKey(row)),
+                value: rawValue == null || rawValue === '' ? Number.NaN : Number(rawValue),
+                index,
+            };
+        }).filter((item) => Number.isFinite(item.value));
+
+        sorted.sort((a, b) => b.value - a.value || a.index - b.index);
+
+        const ranks = new Map();
+        let previousValue;
+        let currentRank = 0;
+
+        sorted.forEach((item, index) => {
+            if (index === 0 || item.value !== previousValue) {
+                currentRank = index + 1;
+                previousValue = item.value;
+            }
+
+            if (currentRank <= 3) {
+                ranks.set(item.key, `rank-top-${currentRank}`);
+            }
+        });
+
+        return ranks;
+    }
+
+    function buildLtpRanks(rows, getContract) {
+        const metricValue = (row, metric) => {
+            const contract = getContract(row);
+            if (!contract) return null;
+
+            if (metric === 'volume') {
+                return contract.trade_volume ?? contract.volume;
+            }
+            if (metric === 'oi') {
+                return contract.open_interest ?? contract.oi;
+            }
+
+            const change = contract.market_data?.opnInterestChg
+                ?? contract.oi_change
+                ?? contract.oiChange;
+            if (metric === 'oiChange') return change;
+
+            const explicitPercent = contract.oi_change_pct;
+            if (explicitPercent != null) return explicitPercent;
+            if (change == null || change === '') return null;
+            const currentOi = Number(contract.open_interest ?? contract.oi);
+            const changeValue = Number(change);
+            const previousOi = currentOi - changeValue;
+            return Number.isFinite(currentOi) && Number.isFinite(changeValue) && currentOi && previousOi > 0
+                ? (changeValue / previousOi) * 100
+                : null;
+        };
+
+        return Object.fromEntries(['volume', 'oi', 'oiChange', 'oiChangePct'].map((metric) => [
+            metric,
+            rankTopThree(rows, (row) => metricValue(row, metric), (row) => row.strike),
+        ]));
     }
 
     function optionGreekCells(side, zone, contract, columns = ['gamma', 'vega', 'theta', 'delta']) {
@@ -747,6 +811,10 @@
         const sortedStrikes = Array.from(strikeMap.values()).sort(
             (a, b) => a.strike - b.strike
         );
+        const ltpRanks = {
+            call: buildLtpRanks(sortedStrikes, (row) => row.call),
+            put: buildLtpRanks(sortedStrikes, (row) => row.put),
+        };
 
         // Update summary metrics
         optionElements.callOi.textContent = formatContracts(totalCallOi);
@@ -834,8 +902,10 @@
             const putZone = isPutItm ? 'zone-itm' : 'zone-otm';
             const callOiValue = toLakhs(c.open_interest);
             const putOiValue = toLakhs(p.open_interest);
-            const callOiCell = optionOiCell('call', callZone, callDepth, callOiValue);
-            const putOiCell = optionOiCell('put', putZone, putDepth, putOiValue);
+            const callRank = (metric) => ltpRanks.call[metric].get(String(s.strike)) || '';
+            const putRank = (metric) => ltpRanks.put[metric].get(String(s.strike)) || '';
+            const callOiCell = optionOiCell('call', callZone, callDepth, callOiValue, callRank('oi'));
+            const putOiCell = optionOiCell('put', putZone, putDepth, putOiValue, putRank('oi'));
             const callLtpCell = optionMetricCell('call', callZone, `<strong>${cLtp}</strong>`, callPnlClass);
             const putLtpCell = optionMetricCell('put', putZone, `<strong>${pLtp}</strong>`, putPnlClass);
             const callOiChangeCell = optionMetricCell('call', callZone, cOiChgLakh, (cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell');
@@ -867,10 +937,10 @@
                 <tr class="${isAtm ? 'atm-row' : ''}">
                     <!-- CALLS: PCR, volume, OI change, OI change %, OI, LTP -->
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${strikePcr}</td>
-                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cVol}</td>
-                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgLakh}</td>
-                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPctStr}</td>
-                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%" aria-label="Call OI ${toLakhs(c.open_interest)}" title="Call OI ${toLakhs(c.open_interest)}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${toLakhs(c.open_interest)}</span></td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${callRank('volume')}">${cVol}</td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'} ${callRank('oiChange')}">${cOiChgLakh}</td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${(cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'} ${callRank('oiChangePct')}">${cOiChgPctStr}</td>
+                    <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell ${callRank('oi')}" style="--depth:${callDepth}%" aria-label="Call OI ${toLakhs(c.open_interest)}" title="Call OI ${toLakhs(c.open_interest)}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${toLakhs(c.open_interest)}</span></td>
                     <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${callPnlClass}"><strong>${cLtp}</strong></td>
 
                     <!-- STRIKE (CENTER) -->
@@ -879,10 +949,10 @@
                     <!-- PUTS: IV, LTP, OI, OI change %, OI change, volume -->
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pIv}</td>
                     <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${putPnlClass}"><strong>${pLtp}</strong></td>
-                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%" aria-label="Put OI ${toLakhs(p.open_interest)}" title="Put OI ${toLakhs(p.open_interest)}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${toLakhs(p.open_interest)}</span></td>
-                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPctStr}</td>
-                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgLakh}</td>
-                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pVol}</td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell ${putRank('oi')}" style="--depth:${putDepth}%" aria-label="Put OI ${toLakhs(p.open_interest)}" title="Put OI ${toLakhs(p.open_interest)}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${toLakhs(p.open_interest)}</span></td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'} ${putRank('oiChangePct')}">${pOiChgPctStr}</td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${(pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell'} ${putRank('oiChange')}">${pOiChgLakh}</td>
+                    <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${putRank('volume')}">${pVol}</td>
                 </tr>
             `;
         }).join('');
@@ -989,6 +1059,11 @@
                     minute: '2-digit',
                 }).format(new Date())}`;
 
+            const ltpRanks = {
+                call: buildLtpRanks(chain.rows, (row) => row.call),
+                put: buildLtpRanks(chain.rows, (row) => row.put),
+            };
+
             optionElements.body.innerHTML = chain.rows.map((row) => {
                 const callDepth = Math.round((row.call.oi / maxCallOi) * 100);
                 const putDepth = Math.round((row.put.oi / maxPutOi) * 100);
@@ -1006,8 +1081,10 @@
                 const isPutItm = chain.spot ? row.strike > chain.spot : false;
                 const callZone = isCallItm ? 'zone-itm' : 'zone-otm';
                 const putZone = isPutItm ? 'zone-itm' : 'zone-otm';
-                const callOiCell = optionOiCell('call', callZone, callDepth, cOiLakh);
-                const putOiCell = optionOiCell('put', putZone, putDepth, pOiLakh);
+                const callRank = (metric) => ltpRanks.call[metric].get(String(row.strike)) || '';
+                const putRank = (metric) => ltpRanks.put[metric].get(String(row.strike)) || '';
+                const callOiCell = optionOiCell('call', callZone, callDepth, cOiLakh, callRank('oi'));
+                const putOiCell = optionOiCell('put', putZone, putDepth, pOiLakh, putRank('oi'));
                 const callLtpCell = optionMetricCell('call', callZone, `<strong>${Number(row.call.ltp).toFixed(2)}</strong>`);
                 const putLtpCell = optionMetricCell('put', putZone, `<strong>${Number(row.put.ltp).toFixed(2)}</strong>`);
                 const callOiChangeCell = optionMetricCell('call', callZone, cOiChgLakh, row.call.oiChange < 0 ? 'negative-cell' : 'positive-cell');
@@ -1038,10 +1115,10 @@
                     <tr class="${row.isAtm ? 'atm-row' : ''}">
                         <!-- CALLS: PCR, volume, OI change, OI change %, OI, LTP -->
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${strikePcr}</td>
-                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}">${cVol}</td>
-                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${row.call.oiChange < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgLakh}</td>
-                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${cOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${cOiChgPct > 0 ? '+' : ''}${cOiChgPct}%</td>
-                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell" style="--depth:${callDepth}%" aria-label="Call OI ${cOiLakh}" title="Call OI ${cOiLakh}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${cOiLakh}</span></td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${callRank('volume')}">${cVol}</td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${row.call.oiChange < 0 ? 'negative-cell' : 'positive-cell'} ${callRank('oiChange')}">${cOiChgLakh}</td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} ${cOiChgPct < 0 ? 'negative-cell' : 'positive-cell'} ${callRank('oiChangePct')}">${cOiChgPct > 0 ? '+' : ''}${cOiChgPct}%</td>
+                        <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'} call-cell ${callRank('oi')}" style="--depth:${callDepth}%" aria-label="Call OI ${cOiLakh}" title="Call OI ${cOiLakh}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${cOiLakh}</span></td>
                         <td class="cell-call ${isCallItm ? 'zone-itm' : 'zone-otm'}"><strong>${Number(row.call.ltp).toFixed(2)}</strong></td>
 
                         <!-- STRIKE -->
@@ -1050,10 +1127,10 @@
                         <!-- PUTS: IV, LTP, OI, OI change %, OI change, volume -->
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${Number(row.put.iv).toFixed(1)}</td>
                         <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}"><strong>${Number(row.put.ltp).toFixed(2)}</strong></td>
-                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell" style="--depth:${putDepth}%" aria-label="Put OI ${pOiLakh}" title="Put OI ${pOiLakh}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${pOiLakh}</span></td>
-                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${pOiChgPct < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgPct > 0 ? '+' : ''}${pOiChgPct}%</td>
-                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${row.put.oiChange < 0 ? 'negative-cell' : 'positive-cell'}">${pOiChgLakh}</td>
-                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'}">${pVol}</td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} put-cell ${putRank('oi')}" style="--depth:${putDepth}%" aria-label="Put OI ${pOiLakh}" title="Put OI ${pOiLakh}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${pOiLakh}</span></td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${pOiChgPct < 0 ? 'negative-cell' : 'positive-cell'} ${putRank('oiChangePct')}">${pOiChgPct > 0 ? '+' : ''}${pOiChgPct}%</td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${row.put.oiChange < 0 ? 'negative-cell' : 'positive-cell'} ${putRank('oiChange')}">${pOiChgLakh}</td>
+                        <td class="cell-put ${isPutItm ? 'zone-itm' : 'zone-otm'} ${putRank('volume')}">${pVol}</td>
                     </tr>
                 `;
             }).join('');
