@@ -617,9 +617,21 @@
         const precision = { gamma: 4, vega: 1, theta: 1, delta: 2 };
         return columns.map((greek) => {
             const value = contract?.[greek];
-            const formatted = value == null || value === '' || !Number.isFinite(Number(value))
-                ? '—'
-                : Number(value).toFixed(precision[greek]);
+            let formatted = '—';
+
+            if (value != null && value !== '' && Number.isFinite(Number(value))) {
+                const numericValue = Number(value);
+
+                if (greek === 'theta' || greek === 'vega') {
+                    const magnitude = Math.abs(numericValue);
+                    const whole = Math.floor(magnitude);
+                    const rounded = whole + (magnitude - whole > 0.5 ? 1 : 0);
+                    formatted = String(Math.sign(numericValue) * rounded);
+                } else {
+                    formatted = numericValue.toFixed(precision[greek]);
+                }
+            }
+
             return optionMetricCell(side, zone, formatted, `greek-cell greek-${greek}`);
         }).join('');
     }
