@@ -1386,3 +1386,68 @@
     height: 100%;
     overflow: auto;
 }
+
+.option-chain-table[data-view="greeks"] {
+    min-width: 1320px;
+}
+
+.option-chain-table[data-view="all"] {
+    min-width: 1880px;
+}
+
+.option-view-toolbar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: stretch;
+    min-height: 42px;
+    overflow-x: auto;
+    border-top: 1px solid #dce3e8;
+    background: #fff;
+    scrollbar-width: thin;
+}
+
+.option-view-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-width: 126px;
+    padding: 0 18px;
+    border: 0;
+    border-right: 1px solid #e0e5e9;
+    border-radius: 0;
+    background: transparent;
+    color: #617080;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.option-view-button span {
+    color: #84909b;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.option-view-button:hover {
+    background: #f7f9fb;
+    color: #1769d2;
+}
+
+.option-view-button.is-active {
+    position: relative;
+    color: #1267cf;
+}
+
+.option-view-button.is-active::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: #2580e8;
+    content: "";
+}

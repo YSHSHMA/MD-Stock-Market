@@ -181,6 +181,11 @@
                         </table>
                     </div>
                     <div class="option-chain-footer"><span id="option-chain-footer-note">Illustrative options data for interface preview only. Not for trading or investment decisions.</span><span id="option-chain-updated">—</span></div>
+                    <div class="option-view-toolbar" role="toolbar" aria-label="Option chain table views">
+                        <button type="button" class="option-view-button is-active" data-option-view="ltp" aria-pressed="true">LTP View <span aria-hidden="true">⌄</span></button>
+                        <button type="button" class="option-view-button" data-option-view="greeks" aria-pressed="false">Greeks View <span aria-hidden="true">⌄</span></button>
+                        <button type="button" class="option-view-button" data-option-view="all" aria-pressed="false">All Column View <span aria-hidden="true">⌄</span></button>
+                    </div>
                     </div>
                 </section>
                 <footer class="page-footer"><span>Marketboard <span id="footer-year"></span></span><span>Data shown is for informational purposes only and may be delayed.</span></footer>

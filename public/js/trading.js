@@ -42,6 +42,8 @@
         putOi: $('#option-put-oi'),
         body: $('#option-chain-body'),
         tableHead: $('.option-chain-table thead'),
+        table: $('.option-chain-table'),
+        colGroup: $('.option-chain-table colgroup'),
         summary: $('#option-summary-grid'),
         badge: $('#option-chain-badge'),
         description: $('#option-chain-description'),
@@ -85,6 +87,7 @@
     let liveFallbackRequest = false;
     let liveSubscriptionSelection = '';
     let liveSubscriptionErrorShown = false;
+    let selectedOptionView = 'ltp';
 
     const wsStatus = $('#ws-status');
     const wsLabel = $('#ws-label');
@@ -560,28 +563,69 @@
         }).format(value);
     }
 
-    function prepareAngelOneGreeksView(source = 'angel_one') {
+    const optionViewColumns = {
+        ltp: {
+            call: ['Call PCR', 'Call Vol.', 'Call OI Chg (lakh)', 'Call OI Chg %', 'Call OI (lakh)', 'Call LTP'],
+            put: ['Put IV', 'Put LTP', 'Put OI (lakh)', 'Put OI Chg %', 'Put OI Chg (lakh)', 'Put Vol.'],
+        },
+        greeks: {
+            call: ['Gamma', 'Vega', 'Theta', 'Delta', 'Call OI Chg (lakh)', 'Call OI (lakh)', 'Call LTP'],
+            put: ['Put LTP', 'Put OI (lakh)', 'Put OI Chg (lakh)', 'Delta', 'Theta', 'Vega', 'Gamma'],
+        },
+        all: {
+            call: ['Call PCR', 'Call Vol.', 'Call OI Chg (lakh)', 'Call OI Chg %', 'Gamma', 'Vega', 'Theta', 'Delta', 'Call OI (lakh)', 'Call LTP'],
+            put: ['Put IV', 'Put LTP', 'Put OI (lakh)', 'Put OI Chg %', 'Put OI Chg (lakh)', 'Put Vol.', 'Delta', 'Theta', 'Vega', 'Gamma'],
+        },
+    };
+
+    function optionViewColumnCount() {
+        const columns = optionViewColumns[selectedOptionView] || optionViewColumns.ltp;
+        return columns.call.length + columns.put.length + 1;
+    }
+
+    function renderOptionViewHeader() {
+        const columns = optionViewColumns[selectedOptionView] || optionViewColumns.ltp;
+
         optionElements.tableHead.innerHTML = `
             <tr class="chain-group-row">
-                <th class="call-group" colspan="6">CALLS <span>CALL OPTIONS</span></th>
+                <th class="call-group" colspan="${columns.call.length}">CALLS <span>CALL OPTIONS</span></th>
                 <th class="strike-group" rowspan="2">STRIKE</th>
-                <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
+                <th class="put-group" colspan="${columns.put.length}">PUTS <span>PUT OPTIONS</span></th>
             </tr>
             <tr class="chain-columns-row">
-                <th class="col-call-pcr">Call PCR</th>
-                <th class="col-call-vol">Call Vol.</th>
-                <th class="col-call-oichg">Call OI Chg (lakh)</th>
-                <th class="col-call-oichgpct">Call OI Chg %</th>
-                <th class="col-call-oi">Call OI (lakh)</th>
-                <th class="col-call-ltp">Call LTP</th>
-                <th class="col-put-iv">Put IV</th>
-                <th class="col-put-ltp">Put LTP</th>
-                <th class="col-put-oi">Put OI (lakh)</th>
-                <th class="col-put-oichgpct">Put OI Chg %</th>
-                <th class="col-put-oichg">Put OI Chg (lakh)</th>
-                <th class="col-put-vol">Put Vol.</th>
+                ${columns.call.map((label) => `<th>${label}</th>`).join('')}
+                ${columns.put.map((label) => `<th>${label}</th>`).join('')}
             </tr>
         `;
+
+        optionElements.colGroup.innerHTML = Array.from({ length: columns.call.length + columns.put.length + 1 }, (_, index) =>
+            `<col${index === columns.call.length ? ' class="col-strike"' : ''}>`
+        ).join('');
+        optionElements.table.dataset.view = selectedOptionView;
+    }
+
+    function optionMetricCell(side, zone, value, extraClass = '') {
+        return `<td class="cell-${side} ${zone} ${extraClass}">${value}</td>`;
+    }
+
+    function optionOiCell(side, zone, depth, value) {
+        const label = `${side === 'call' ? 'Call' : 'Put'} OI ${value}`;
+        return `<td class="cell-${side} ${zone} ${side}-cell" style="--depth:${depth}%" aria-label="${label}" title="${label}"><span class="oi-progress" aria-hidden="true"></span><span class="oi-progress-value" aria-hidden="true">${value}</span></td>`;
+    }
+
+    function optionGreekCells(side, zone, contract, columns = ['gamma', 'vega', 'theta', 'delta']) {
+        const precision = { gamma: 4, vega: 1, theta: 1, delta: 2 };
+        return columns.map((greek) => {
+            const value = contract?.[greek];
+            const formatted = value == null || value === '' || !Number.isFinite(Number(value))
+                ? '—'
+                : Number(value).toFixed(precision[greek]);
+            return optionMetricCell(side, zone, formatted, `greek-cell greek-${greek}`);
+        }).join('');
+    }
+
+    function prepareAngelOneGreeksView(source = 'angel_one') {
+        renderOptionViewHeader();
 
         optionElements.summary.hidden = false;
 
@@ -603,27 +647,7 @@
     }
 
     function restoreDemoOptionChain() {
-        optionElements.tableHead.innerHTML = `
-            <tr class="chain-group-row">
-                <th class="call-group" colspan="6">CALLS <span>CALL OPTIONS</span></th>
-                <th class="strike-group" rowspan="2">STRIKE</th>
-                <th class="put-group" colspan="6">PUTS <span>PUT OPTIONS</span></th>
-            </tr>
-            <tr class="chain-columns-row">
-                <th class="col-call-pcr">Call PCR</th>
-                <th class="col-call-vol">Call Vol.</th>
-                <th class="col-call-oichg">Call OI Chg (lakh)</th>
-                <th class="col-call-oichgpct">Call OI Chg %</th>
-                <th class="col-call-oi">Call OI (lakh)</th>
-                <th class="col-call-ltp">Call LTP</th>
-                <th class="col-put-iv">Put IV</th>
-                <th class="col-put-ltp">Put LTP</th>
-                <th class="col-put-oi">Put OI (lakh)</th>
-                <th class="col-put-oichgpct">Put OI Chg %</th>
-                <th class="col-put-oichg">Put OI Chg (lakh)</th>
-                <th class="col-put-vol">Put Vol.</th>
-            </tr>
-        `;
+        renderOptionViewHeader();
         optionElements.summary.hidden = false;
         optionElements.badge.innerHTML = '<span></span> SIMULATED DATA';
         optionElements.badge.classList.remove('live-badge');
@@ -662,7 +686,7 @@
         if (!rows.length) {
             optionElements.body.innerHTML = `
                 <tr>
-            <td colspan="13" class="chain-error">
+            <td colspan="${optionViewColumnCount()}" class="chain-error">
                         Angel One returned no live option data for this underlying and expiry.
                     </td>
                 </tr>
@@ -794,6 +818,38 @@
 
             const callPnlClass = (c.market_data?.netChange ?? 0) < 0 ? 'negative-cell' : 'positive-cell';
             const putPnlClass = (p.market_data?.netChange ?? 0) < 0 ? 'negative-cell' : 'positive-cell';
+            const callZone = isCallItm ? 'zone-itm' : 'zone-otm';
+            const putZone = isPutItm ? 'zone-itm' : 'zone-otm';
+            const callOiValue = toLakhs(c.open_interest);
+            const putOiValue = toLakhs(p.open_interest);
+            const callOiCell = optionOiCell('call', callZone, callDepth, callOiValue);
+            const putOiCell = optionOiCell('put', putZone, putDepth, putOiValue);
+            const callLtpCell = optionMetricCell('call', callZone, `<strong>${cLtp}</strong>`, callPnlClass);
+            const putLtpCell = optionMetricCell('put', putZone, `<strong>${pLtp}</strong>`, putPnlClass);
+            const callOiChangeCell = optionMetricCell('call', callZone, cOiChgLakh, (cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell');
+            const putOiChangeCell = optionMetricCell('put', putZone, pOiChgLakh, (pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell');
+            const strikeCell = `<td class="strike-cell ${isAtm ? 'atm-strike-active' : ''}">${formatContracts(s.strike)}${isAtm ? ' · ATM' : ''}</td>`;
+
+            if (selectedOptionView === 'greeks') {
+                return `<tr class="${isAtm ? 'atm-row' : ''}">
+                    ${optionGreekCells('call', callZone, c)}${callOiChangeCell}${callOiCell}${callLtpCell}
+                    ${strikeCell}
+                    ${putLtpCell}${putOiCell}${putOiChangeCell}${optionGreekCells('put', putZone, p, ['delta', 'theta', 'vega', 'gamma'])}
+                </tr>`;
+            }
+
+            if (selectedOptionView === 'all') {
+                return `<tr class="${isAtm ? 'atm-row' : ''}">
+                    ${optionMetricCell('call', callZone, strikePcr)}${optionMetricCell('call', callZone, cVol)}${callOiChangeCell}
+                    ${optionMetricCell('call', callZone, cOiChgPctStr, (cOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell')}
+                    ${optionGreekCells('call', callZone, c)}${callOiCell}${callLtpCell}
+                    ${strikeCell}
+                    ${optionMetricCell('put', putZone, pIv)}${putLtpCell}${putOiCell}
+                    ${optionMetricCell('put', putZone, pOiChgPctStr, (pOiPctVal || 0) < 0 ? 'negative-cell' : 'positive-cell')}
+                    ${putOiChangeCell}${optionMetricCell('put', putZone, pVol)}
+                    ${optionGreekCells('put', putZone, p, ['delta', 'theta', 'vega', 'gamma'])}
+                </tr>`;
+            }
 
             return `
                 <tr class="${isAtm ? 'atm-row' : ''}">
@@ -831,7 +887,7 @@
 
         if (!silent) optionElements.body.innerHTML = `
             <tr>
-                <td colspan="13" class="chain-loading">
+                <td colspan="${optionViewColumnCount()}" class="chain-loading">
                     <span class="spinner"></span>
                     Loading ${angelOneConnected ? 'live Angel One option data' : 'simulated option chain'}…
                 </td>
@@ -849,7 +905,7 @@
                 if (!expiry) {
                     optionElements.body.innerHTML = `
                         <tr>
-                            <td colspan="13" class="chain-error">
+                            <td colspan="${optionViewColumnCount()}" class="chain-error">
                                 Choose an expiry listed by Angel One for this underlying.
                             </td>
                         </tr>
@@ -936,6 +992,35 @@
 
                 const isCallItm = chain.spot ? row.strike < chain.spot : false;
                 const isPutItm = chain.spot ? row.strike > chain.spot : false;
+                const callZone = isCallItm ? 'zone-itm' : 'zone-otm';
+                const putZone = isPutItm ? 'zone-itm' : 'zone-otm';
+                const callOiCell = optionOiCell('call', callZone, callDepth, cOiLakh);
+                const putOiCell = optionOiCell('put', putZone, putDepth, pOiLakh);
+                const callLtpCell = optionMetricCell('call', callZone, `<strong>${Number(row.call.ltp).toFixed(2)}</strong>`);
+                const putLtpCell = optionMetricCell('put', putZone, `<strong>${Number(row.put.ltp).toFixed(2)}</strong>`);
+                const callOiChangeCell = optionMetricCell('call', callZone, cOiChgLakh, row.call.oiChange < 0 ? 'negative-cell' : 'positive-cell');
+                const putOiChangeCell = optionMetricCell('put', putZone, pOiChgLakh, row.put.oiChange < 0 ? 'negative-cell' : 'positive-cell');
+                const strikeCell = `<td class="strike-cell ${row.isAtm ? 'atm-strike-active' : ''}">${formatContracts(row.strike)}${row.isAtm ? ' · ATM' : ''}</td>`;
+
+                if (selectedOptionView === 'greeks') {
+                    return `<tr class="${row.isAtm ? 'atm-row' : ''}">
+                        ${optionGreekCells('call', callZone, row.call)}${callOiChangeCell}${callOiCell}${callLtpCell}
+                        ${strikeCell}
+                        ${putLtpCell}${putOiCell}${putOiChangeCell}${optionGreekCells('put', putZone, row.put, ['delta', 'theta', 'vega', 'gamma'])}
+                    </tr>`;
+                }
+
+                if (selectedOptionView === 'all') {
+                    return `<tr class="${row.isAtm ? 'atm-row' : ''}">
+                        ${optionMetricCell('call', callZone, strikePcr)}${optionMetricCell('call', callZone, cVol)}${callOiChangeCell}
+                        ${optionMetricCell('call', callZone, `${cOiChgPct > 0 ? '+' : ''}${cOiChgPct}%`)}
+                        ${optionGreekCells('call', callZone, row.call)}${callOiCell}${callLtpCell}
+                        ${strikeCell}
+                        ${optionMetricCell('put', putZone, Number(row.put.iv).toFixed(1))}${putLtpCell}${putOiCell}
+                        ${optionMetricCell('put', putZone, `${pOiChgPct > 0 ? '+' : ''}${pOiChgPct}%`)}${putOiChangeCell}${optionMetricCell('put', putZone, pVol)}
+                        ${optionGreekCells('put', putZone, row.put, ['delta', 'theta', 'vega', 'gamma'])}
+                    </tr>`;
+                }
 
                 return `
                     <tr class="${row.isAtm ? 'atm-row' : ''}">
@@ -970,7 +1055,7 @@
 
             optionElements.body.innerHTML = `
                 <tr>
-                    <td colspan="13" class="chain-error">
+                    <td colspan="${optionViewColumnCount()}" class="chain-error">
                         ${escapeHtml(error.message)}
                     </td>
                 </tr>
@@ -996,7 +1081,7 @@
 
         optionElements.body.innerHTML = `
             <tr>
-                <td colspan="10" class="chain-loading">
+                <td colspan="${optionViewColumnCount()}" class="chain-loading">
                     <span class="spinner"></span> Loading listed expiries…
                 </td>
             </tr>
@@ -1079,7 +1164,7 @@
 
             optionElements.body.innerHTML = `
                 <tr>
-                    <td colspan="10" class="chain-error">
+                    <td colspan="${optionViewColumnCount()}" class="chain-error">
                         ${escapeHtml(error.message)}
                     </td>
                 </tr>
@@ -1211,7 +1296,7 @@
         if (!angelOneConnected && !provider) {
             optionElements.body.innerHTML = `
                 <tr>
-                    <td colspan="13" class="chain-error">
+                    <td colspan="${optionViewColumnCount()}" class="chain-error">
                         Option-chain demo provider is unavailable.
                     </td>
                 </tr>
@@ -1266,6 +1351,23 @@
             refreshOptionChain();
         }
     }
+
+    document.querySelectorAll('.option-view-button').forEach((button) => {
+        button.addEventListener('click', () => {
+            selectedOptionView = button.dataset.optionView || 'ltp';
+            document.querySelectorAll('.option-view-button').forEach((viewButton) => {
+                const active = viewButton === button;
+                viewButton.classList.toggle('is-active', active);
+                viewButton.setAttribute('aria-pressed', String(active));
+            });
+
+            renderOptionViewHeader();
+
+            if (optionChainInitialized) {
+                refreshOptionChain();
+            }
+        });
+    });
 
     function showOptionChain() {
         const section = $('#option-chain');
