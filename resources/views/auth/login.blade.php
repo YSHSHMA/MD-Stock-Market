@@ -10,7 +10,7 @@
 <body class="auth-page">
     <main class="auth-layout">
         <section class="auth-story">
-            <a class="brand" href="{{ route('login') }}"><span class="brand-mark">M</span><span>market<span class="brand-light">board</span></span></a>
+            <a class="brand" href="{{ route('login') }}"><span class="brand-mark">T</span><span>treddy</span></a>
             <div class="auth-story-copy">
                 <span class="eyebrow"><span class="live-dot"></span> YOUR PORTFOLIO, IN FOCUS</span>
                 <h1>Make every<br>move <span>count.</span></h1>
@@ -35,7 +35,7 @@
                     <label class="remember-row"><input type="checkbox" name="remember" value="1"> <span>Keep me signed in</span></label>
                     <button class="button button-primary auth-submit" type="submit">Sign in <span>→</span></button>
                 </form>
-                <p class="auth-switch">New to Marketboard? <a href="{{ route('register') }}">Create an account</a></p>
+                <p class="auth-switch">New to Treddy? <a href="{{ route('register') }}">Create an account</a></p>
             </div>
         </section>
     </main>

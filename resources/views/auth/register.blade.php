@@ -10,7 +10,7 @@
 <body class="auth-page">
     <main class="auth-layout">
         <section class="auth-story">
-            <a class="brand" href="{{ route('register') }}"><span class="brand-mark">M</span><span>market<span class="brand-light">board</span></span></a>
+            <a class="brand" href="{{ route('register') }}"><span class="brand-mark">T</span><span>treddy</span></a>
             <div class="auth-story-copy">
                 <span class="eyebrow"><span class="live-dot"></span> A BETTER VIEW OF YOUR MONEY</span>
                 <h1>Your next<br>chapter <span>starts here.</span></h1>

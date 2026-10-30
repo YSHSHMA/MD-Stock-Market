@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'));
+Route::view('/about', 'pages.about')->name('about');
+Route::view('/privacy-policy', 'pages.privacy-policy')->name('privacy-policy');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [WebAuthController::class, 'showLogin'])->name('login');

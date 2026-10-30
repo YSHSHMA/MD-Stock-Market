@@ -1449,7 +1449,7 @@
         angelOneElements.status.querySelector('span:last-child').textContent =
             connected
                 ? `Angel One connected as ${clientCode} · Live option Greeks enabled`
-                : 'Sample feed · Connect Angel One to securely retrieve an API access token';
+                : 'Connect Angel One';
 
         angelOneElements.status.hidden = connected;
         angelOneElements.fields.hidden = connected;
@@ -1584,6 +1584,12 @@
                 'active',
                 link.getAttribute('href') === hash
             );
+        });
+
+        document.querySelectorAll('.topbar-navigation .top-nav-link[data-nav-section]').forEach((link) => {
+            const active = link.dataset.navSection === (hash === '#option-chain' ? 'option-chain' : 'overview');
+            link.classList.toggle('active', active);
+            link.setAttribute('aria-current', active ? 'page' : 'false');
         });
 
         if (hash === '#option-chain') {

@@ -38,6 +38,126 @@
     --sb-red-text: #d32f2f;
 }
 
+/* Full-width dashboard header keeps the option chain from losing sidebar space. */
+.dashboard-page .sidebar {
+    display: none;
+}
+
+.dashboard-page .main-content {
+    margin-left: 0;
+}
+
+.dashboard-page .topbar {
+    justify-content: space-between;
+    gap: 18px;
+    padding: 0 22px;
+}
+
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    min-width: 0;
+}
+
+.topbar-left .brand,
+.info-topbar .brand {
+    flex: 0 0 auto;
+}
+
+.topbar-navigation {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+
+.top-nav-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 11px;
+    border-radius: 7px;
+    color: #718078;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.top-nav-link:hover,
+.top-nav-link.active {
+    background: #edf7f1;
+    color: #176b4b;
+}
+
+.dashboard-page .page-content {
+    width: 100%;
+    max-width: none;
+    padding-right: 20px;
+    padding-left: 20px;
+}
+
+.information-page {
+    min-height: 100vh;
+    background: #f5f7f6;
+}
+
+.info-topbar {
+    justify-content: flex-start;
+    gap: 30px;
+    padding: 0 clamp(18px, 4vw, 48px);
+}
+
+.info-content {
+    width: min(900px, calc(100% - 40px));
+    margin: 42px auto 70px;
+}
+
+.info-content h1 {
+    max-width: 760px;
+    margin: 10px 0 14px;
+    color: #203129;
+    font: 700 clamp(30px, 4vw, 44px)/1.12 Manrope, sans-serif;
+    letter-spacing: -1.7px;
+}
+
+.info-lead {
+    max-width: 760px;
+    margin: 0 0 28px;
+    color: #708078;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.info-card {
+    margin: 14px 0;
+    padding: 22px 24px;
+    border: 1px solid #e5ece8;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.info-card h2 {
+    margin: 0 0 10px;
+    color: #304239;
+    font: 700 16px Manrope, sans-serif;
+}
+
+.info-card p {
+    margin: 8px 0 0;
+    color: #738078;
+    font-size: 12px;
+    line-height: 1.8;
+}
+
+.info-back-link {
+    display: inline-block;
+    margin-top: 13px;
+    color: #176b4b;
+    font-size: 12px;
+    font-weight: 700;
+}
+
 .option-chain-card[hidden] {
     display: none;
 }
@@ -173,7 +293,6 @@
     overflow: hidden;
 }
 
-.option-chain-focus .topbar,
 .option-chain-focus .welcome-row,
 .option-chain-focus .notice-banner,
 .option-chain-focus .stats-grid,
@@ -181,6 +300,12 @@
 .option-chain-focus .activity-card,
 .option-chain-focus .page-footer {
     display: none;
+}
+
+.option-chain-focus .topbar {
+    display: flex;
+    flex: 0 0 54px;
+    height: 54px;
 }
 
 .option-chain-focus .page-content {
@@ -671,10 +796,10 @@
     align-items: center;
     gap: 7px;
     padding: 0 10px;
-    border: 1px solid #dfe9e2;
+    border: 1px solid #f1dfb8;
     border-radius: 7px;
-    background: #fff;
-    color: #397256;
+    background: #fff9ec;
+    color: #98691a;
     cursor: pointer;
     font-size: 9px;
     font-weight: 700;
@@ -1188,6 +1313,65 @@
 }
 
 @media (max-width: 760px) {
+    .dashboard-page .topbar {
+        gap: 8px;
+        padding: 0 10px;
+    }
+
+    .topbar-left {
+        gap: 8px;
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
+
+    .topbar-left .brand-name,
+    .info-topbar .brand-name {
+        display: none;
+    }
+
+    .topbar-navigation {
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .topbar-navigation::-webkit-scrollbar {
+        display: none;
+    }
+
+    .top-nav-link {
+        padding: 0 7px;
+        font-size: 9px;
+    }
+
+    .dashboard-page .topbar-right {
+        flex: 0 0 auto;
+        gap: 6px;
+    }
+
+    .dashboard-page .topbar-date,
+    .dashboard-page .topbar-divider {
+        display: none;
+    }
+
+    .dashboard-page .page-content {
+        padding-right: 10px;
+        padding-left: 10px;
+    }
+
+    .info-topbar {
+        gap: 9px;
+        padding: 0 10px;
+    }
+
+    .info-content {
+        width: calc(100% - 24px);
+        margin-top: 28px;
+    }
+
+    .info-card {
+        padding: 18px;
+    }
+
     .sidebar nav {
         display: flex;
         width: auto;

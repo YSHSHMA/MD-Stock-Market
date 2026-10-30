@@ -13,7 +13,7 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <a class="brand" href="{{ route('dashboard') }}"><span class="brand-mark">M</span><span class="brand-name">market<span class="brand-light">board</span></span></a>
+                <a class="brand" href="{{ route('dashboard') }}"><span class="brand-mark">T</span><span class="brand-name">treddy</span></a>
                 <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="workspace-navigation" title="Collapse sidebar"><span>‹</span></button>
             </div>
             <nav id="workspace-navigation" aria-label="Workspace navigation">
@@ -30,7 +30,15 @@
         </aside>
         <main class="main-content">
             <header class="topbar">
-                <div class="breadcrumb"><span>Workspace</span><span class="breadcrumb-sep">/</span><strong>Overview</strong></div>
+                <div class="topbar-left">
+                    <a class="brand" href="{{ route('dashboard') }}"><span class="brand-mark">T</span><span class="brand-name">treddy</span></a>
+                    <nav class="topbar-navigation" aria-label="Main navigation">
+                    <a class="top-nav-link active" data-nav-section="overview" href="{{ route('dashboard') }}">Overview</a>
+                    <a class="top-nav-link" data-nav-section="option-chain" href="{{ route('dashboard') }}#option-chain">Option Chain</a>
+                        <a class="top-nav-link" href="{{ route('about') }}">About Us</a>
+                        <a class="top-nav-link" href="{{ route('privacy-policy') }}">Privacy Policy</a>
+                    </nav>
+                </div>
                 <div class="topbar-right"><span class="market-status" id="ws-status" title="WebSocket status"><span class="status-dot" id="ws-dot"></span> <span id="ws-label">Connecting…</span></span><span class="topbar-divider"></span><span class="topbar-date" id="today-date"></span>
              <form action="{{ route('logout') }}" method="POST" class="logout-form">
                 @csrf
@@ -70,14 +78,13 @@
                                 <h2>Option chain</h2>
                                 <span class="sample-badge" id="option-chain-badge"><span></span> SIMULATED DATA</span>
                             </div>
-                            <p id="option-chain-description">Explore call and put contracts by strike and expiry. Quotes below are illustrative sample data, not live prices.</p>
+                            <p id="option-chain-description" hidden></p>
                         </div>
                         <div class="header-right-group">
-                            <button class="icon-button" id="refresh-option-chain" type="button" title="Refresh chain" aria-label="Refresh chain">↻</button>
                             <div class="angel-one-tools">
                                 <div class="chain-source-note" id="angel-one-status" role="status">
                                     <span class="source-dot"></span>
-                                    <span>Sample feed · Connect Angel One to securely retrieve an API access token</span>
+                                    <span>Connect Angel One</span>
                                 </div>
                                 <details class="angel-one-connection" id="angel-one-connection">
                                     <summary id="angel-one-summary">
@@ -112,9 +119,10 @@
                                     </div>
                                 </details>
                             </div>
+                            <button class="icon-button" id="refresh-option-chain" type="button" title="Refresh chain" aria-label="Refresh chain">↻</button>
                         </div>
                     </div>
-                    <p class="option-connect-prompt" id="option-connect-prompt">Connect your Angel One account to load live option data.</p>
+                    <p class="option-connect-prompt" id="option-connect-prompt" hidden></p>
                     <div class="option-live-content" id="option-live-content" hidden>
                     <div class="option-chain-controls option-market-controls single-line-bar" id="option-market-controls" hidden>
                         <div class="market-inputs-row">
@@ -188,7 +196,7 @@
                     </div>
                     </div>
                 </section>
-                <footer class="page-footer"><span>Marketboard <span id="footer-year"></span></span><span>Data shown is for informational purposes only and may be delayed.</span></footer>
+                <footer class="page-footer"><span>Treddy <span id="footer-year"></span></span><span>Data shown is for informational purposes only and may be delayed.</span></footer>
             </div>
         </main>
     </div>
