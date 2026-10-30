@@ -968,6 +968,25 @@
     letter-spacing: .2px;
 }
 
+.option-chain-table .metric-share {
+    display: inline-block;
+    margin-left: 8px;
+    color: currentColor;
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.82;
+    white-space: nowrap;
+}
+
+.option-chain-table col.col-metric-value {
+    width: 92px;
+    min-width: 92px;
+}
+
+.option-chain-table[data-view="ltp"] {
+    min-width: 1280px;
+}
+
 /* 3. Row & Cell Base Layer */
 .option-chain-table td {
     height: 25px;
