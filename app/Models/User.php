@@ -25,6 +25,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'google_id',
         'username',
         'password',
         'telegram_id',
@@ -51,6 +52,7 @@ class User extends Authenticatable
             'id' => 'string',
             'name' => 'string',
             'email' => 'string',
+            'google_id' => 'string',
             'telegram_id' => 'string',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
