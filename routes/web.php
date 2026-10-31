@@ -5,14 +5,14 @@ use App\Http\Controllers\Auth\WebAuthController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'));
+Route::get('/', fn () => view('welcome'))->name('home');
 Route::view('/about', 'pages.about')->name('about');
 Route::view('/privacy-policy', 'pages.privacy-policy')->name('privacy-policy');
 
 Route::middleware('guest')->group(function (): void {
-    Route::get('/login', [WebAuthController::class, 'showLogin'])->name('login');
+    Route::get('/login', fn () => redirect()->route('home', ['auth' => 'login']))->name('login');
     Route::post('/login', [WebAuthController::class, 'login'])->name('login.store');
-    Route::get('/register', [WebAuthController::class, 'showRegister'])->name('register');
+    Route::get('/register', fn () => redirect()->route('home', ['auth' => 'register']))->name('register');
     Route::post('/register', [WebAuthController::class, 'register'])->name('register.store');
 });
 

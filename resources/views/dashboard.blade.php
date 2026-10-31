@@ -13,7 +13,7 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <a class="brand" href="{{ route('dashboard') }}"><span class="brand-mark">T</span><span class="brand-name">treddy</span></a>
+                <a class="brand" href="{{ route('home') }}"><span class="brand-mark">T</span><span class="brand-name">treddy</span></a>
                 <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="workspace-navigation" title="Collapse sidebar"><span>‹</span></button>
             </div>
             <nav id="workspace-navigation" aria-label="Workspace navigation">
@@ -31,7 +31,7 @@
         <main class="main-content">
             <header class="topbar">
                 <div class="topbar-left">
-                    <a class="brand" href="{{ route('dashboard') }}"><span class="brand-mark">T</span><span class="brand-name">treddy</span></a>
+                    <a class="brand" href="{{ route('home') }}"><span class="brand-mark">T</span><span class="brand-name">treddy</span></a>
                     <nav class="topbar-navigation" aria-label="Main navigation">
                     <a class="top-nav-link active" data-nav-section="overview" href="{{ route('dashboard') }}">Overview</a>
                     <a class="top-nav-link" data-nav-section="option-chain" href="{{ route('dashboard') }}#option-chain">Option Chain</a>
